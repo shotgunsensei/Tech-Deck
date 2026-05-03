@@ -52,6 +52,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { LogOut, ChevronUp } from "lucide-react";
 import type { MemberRole } from "@shared/schema";
+import { PlanBadge } from "@/components/plan-badge";
 
 interface AppSidebarProps {
   role: MemberRole;
@@ -136,23 +137,26 @@ export function AppSidebar({ role, isSystemAdmin = false, isPaused = false }: Ap
   return (
     <Sidebar>
       <SidebarHeader className="p-4">
-        <Link href="/">
-          <div className="flex items-center gap-2 cursor-pointer">
-            <img
-              src={logoImage}
-              alt="Tech Deck"
-              className="w-8 h-8 rounded-md object-cover"
-            />
-            <div>
-              <h2 className="text-sm font-semibold tracking-tight leading-none">
-                Tech Deck
-              </h2>
-              <p className="text-xs text-muted-foreground leading-none mt-0.5">
-                MSP Platform
-              </p>
+        <div className="flex items-center justify-between gap-2">
+          <Link href="/">
+            <div className="flex items-center gap-2 cursor-pointer">
+              <img
+                src={logoImage}
+                alt="Tech Deck"
+                className="w-8 h-8 rounded-md object-cover"
+              />
+              <div>
+                <h2 className="text-sm font-semibold tracking-tight leading-none">
+                  Tech Deck
+                </h2>
+                <p className="text-xs text-muted-foreground leading-none mt-0.5">
+                  MSP Platform
+                </p>
+              </div>
             </div>
-          </div>
-        </Link>
+          </Link>
+          <PlanBadge canManage={isAdminOrOwner} />
+        </div>
       </SidebarHeader>
       <SidebarContent>
         {portalNavItems.length > 0 && (

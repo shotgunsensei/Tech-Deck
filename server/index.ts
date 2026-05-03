@@ -64,6 +64,18 @@ app.use("/api/public", createRateLimiter("api-public", 60_000, 60));
 app.use("/api/auth", createRateLimiter("auth", 60_000, 20));
 app.use("/api/api-tokens", createRateLimiter("api-tokens", 60_000, 20));
 
+// Global write-rate limiter for all tenant API mutations.
+// Read requests pass through. Public endpoints already have their own limits above.
+const writeLimiter = createRateLimiter("api-write", 60_000, 120);
+app.use("/api", (req, res, next) => {
+  const m = req.method;
+  if (m === "GET" || m === "HEAD" || m === "OPTIONS") return next();
+  if (req.path.startsWith("/v1/") || req.path.startsWith("/public/") || req.path.startsWith("/auth/") || req.path.startsWith("/api-tokens")) {
+    return next();
+  }
+  return writeLimiter(req, res, next);
+});
+
 app.use(
   express.json({
     limit: "1mb",

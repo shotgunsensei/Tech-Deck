@@ -682,7 +682,10 @@ export default function LandingPage() {
               </a>
             </span>
             <div className="flex items-center gap-3">
+              <a href="/pricing" className="hover:text-foreground transition-colors" data-testid="link-footer-pricing-page">Full Pricing</a>
               <a href="/privacy" className="hover:text-foreground transition-colors" data-testid="link-footer-privacy">Privacy</a>
+              <a href="/terms" className="hover:text-foreground transition-colors" data-testid="link-footer-terms">Terms</a>
+              <a href="/refund" className="hover:text-foreground transition-colors" data-testid="link-footer-refund">Refunds</a>
               <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
 <a href="/delete-account" className="hover:text-foreground transition-colors" data-testid="link-footer-delete">Delete Account</a>
             </div>

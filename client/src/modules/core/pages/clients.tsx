@@ -41,6 +41,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient as qc } from "@/lib/queryClient";
 import type { Client } from "@shared/schema";
+import { EmptyState } from "@/components/empty-state";
 
 export default function ClientsPage() {
   const [search, setSearch] = useState("");
@@ -346,15 +347,12 @@ export default function ClientsPage() {
       </div>
 
       {!filtered?.length ? (
-        <div className="text-center py-16 text-muted-foreground">
-          <Users className="w-10 h-10 mx-auto mb-3 opacity-40" />
-          <p className="text-sm font-medium">
-            {search ? "No clients match your search" : "No clients yet"}
-          </p>
-          {!search && (
-            <p className="text-xs mt-1">Add your first client to get started.</p>
-          )}
-        </div>
+        <EmptyState
+          icon={Users}
+          title={search ? "No clients match your search" : "No clients yet"}
+          description={search ? "Try a different search term." : "Add your first client to start tracking sites, assets, and tickets."}
+          action={!search ? { label: "Add Client", onClick: () => setOpen(true), testId: "button-empty-add-client" } : undefined}
+        />
       ) : (
         <div className="space-y-2">
           <div className="flex items-center gap-2 px-1">
