@@ -38,6 +38,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { EmptyState } from "@/components/empty-state";
 import { z } from "zod";
 import { format } from "date-fns";
 
@@ -226,23 +227,12 @@ export default function InvoicesPage() {
       <Card>
         <CardContent className="p-0">
           {!invoices?.length ? (
-            <div className="text-center py-16 text-muted-foreground">
-              <FileText className="w-10 h-10 mx-auto mb-3 opacity-40" />
-              <p className="text-sm font-medium">No invoices found</p>
-              <p className="text-xs mt-1">
-                Create your first invoice to get started.
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-4"
-                onClick={() => setShowCreateDialog(true)}
-                data-testid="button-create-invoice-empty"
-              >
-                <Plus className="w-4 h-4 mr-1" />
-                New Invoice
-              </Button>
-            </div>
+            <EmptyState
+              icon={FileText}
+              title="No invoices found"
+              description="Create your first invoice to get started."
+              action={{ label: "New Invoice", onClick: () => setShowCreateDialog(true), testId: "button-create-invoice-empty" }}
+            />
           ) : (
             <div>
               <div className="flex items-center gap-3 px-4 py-2 border-b text-xs text-muted-foreground font-medium">

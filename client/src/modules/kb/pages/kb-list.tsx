@@ -40,6 +40,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { EmptyState } from "@/components/empty-state";
 import { z } from "zod";
 import { formatDistanceToNow } from "date-fns";
 
@@ -184,21 +185,12 @@ export default function KbListPage() {
       <Card>
         <CardContent className="p-0">
           {!articles?.length ? (
-            <div className="text-center py-16 text-muted-foreground">
-              <BookOpen className="w-10 h-10 mx-auto mb-3 opacity-40" />
-              <p className="text-sm font-medium">No articles found</p>
-              <p className="text-xs mt-1">Create your first knowledge base article.</p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-4"
-                onClick={() => setShowCreateDialog(true)}
-                data-testid="button-create-article-empty"
-              >
-                <Plus className="w-4 h-4 mr-1" />
-                New Article
-              </Button>
-            </div>
+            <EmptyState
+              icon={BookOpen}
+              title="No articles found"
+              description="Create your first knowledge base article."
+              action={{ label: "New Article", onClick: () => setShowCreateDialog(true), testId: "button-create-article-empty" }}
+            />
           ) : (
             <div>
               <div className="flex items-center gap-3 px-4 py-2 border-b text-xs text-muted-foreground font-medium">

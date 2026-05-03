@@ -42,7 +42,6 @@ class SmtpMailProvider implements MailProvider {
   private async getTransporter() {
     if (!this.transporterPromise) {
       this.transporterPromise = (async () => {
-        // @ts-expect-error - nodemailer is optional, install only when SMTP is enabled
         const nodemailer = await import("nodemailer").catch(() => null);
         if (!nodemailer) {
           throw new Error(

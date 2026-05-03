@@ -48,6 +48,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { EmptyState } from "@/components/empty-state";
 import { z } from "zod";
 import { formatDistanceToNow } from "date-fns";
 
@@ -292,21 +293,12 @@ export default function TicketsPage() {
       <Card>
         <CardContent className="p-0">
           {!tickets?.length ? (
-            <div className="text-center py-16 text-muted-foreground">
-              <Ticket className="w-10 h-10 mx-auto mb-3 opacity-40" />
-              <p className="text-sm font-medium">No tickets found</p>
-              <p className="text-xs mt-1">Create your first ticket to get started.</p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-4"
-                onClick={() => setShowCreateDialog(true)}
-                data-testid="button-create-ticket-empty"
-              >
-                <Plus className="w-4 h-4 mr-1" />
-                New Ticket
-              </Button>
-            </div>
+            <EmptyState
+              icon={Ticket}
+              title="No tickets found"
+              description="Create your first ticket to get started."
+              action={{ label: "New Ticket", onClick: () => setShowCreateDialog(true), testId: "button-create-ticket-empty" }}
+            />
           ) : (
             <div>
               <div className="flex items-center gap-3 px-4 py-2 border-b text-xs text-muted-foreground font-medium">

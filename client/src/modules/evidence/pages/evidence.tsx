@@ -33,6 +33,7 @@ import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import type { EvidenceWithRelations } from "@/lib/types";
 import type { Client, Tag } from "@shared/schema";
+import { EmptyState } from "@/components/empty-state";
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return bytes + " B";
@@ -308,25 +309,12 @@ export default function EvidencePage() {
       )}
 
       {!evidence?.length ? (
-        <div className="text-center py-16 text-muted-foreground">
-          <FileText className="w-10 h-10 mx-auto mb-3 opacity-40" />
-          <p className="text-sm font-medium">
-            {search || hasActiveFilters
-              ? "No evidence matches your filters"
-              : "No evidence uploaded yet"}
-          </p>
-          {!search && !hasActiveFilters && (
-            <>
-              <p className="text-xs mt-1">Upload your first evidence file to get started.</p>
-              <Button asChild variant="outline" size="sm" className="mt-4">
-                <Link href="/evidence/upload">
-                  <Upload className="w-4 h-4 mr-1" />
-                  Upload Evidence
-                </Link>
-              </Button>
-            </>
-          )}
-        </div>
+        <EmptyState
+          icon={FileText}
+          title={search || hasActiveFilters ? "No evidence matches your filters" : "No evidence uploaded yet"}
+          description={search || hasActiveFilters ? "Try clearing your filters." : "Upload your first evidence file to get started."}
+          action={!search && !hasActiveFilters ? { label: "Upload Evidence", href: "/evidence/upload", testId: "button-upload-evidence-empty" } : undefined}
+        />
       ) : (
         <div className="grid gap-2">
           {evidence.map((item) => {

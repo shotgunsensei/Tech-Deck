@@ -2,10 +2,13 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { logger, requestIdMiddleware } from "./logger";
 
 const app = express();
 app.set("trust proxy", 1);
 const httpServer = createServer(app);
+
+app.use(requestIdMiddleware());
 
 declare module "http" {
   interface IncomingMessage {
@@ -88,14 +91,7 @@ app.use(
 app.use(express.urlencoded({ extended: false, limit: "1mb" }));
 
 export function log(message: string, source = "express") {
-  const formattedTime = new Date().toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
-
-  console.log(`${formattedTime} [${source}] ${message}`);
+  logger.info({ source }, message);
 }
 
 app.use((req, res, next) => {
