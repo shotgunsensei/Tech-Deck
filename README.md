@@ -1,6 +1,31 @@
 # Tech Deck
 
-**v1.0.0** — Multi-tenant MSP management platform for IT teams, MSPs, and digital creators.
+**The IT operations cockpit for MSPs and senior technical teams.**
+
+A multi-tenant SaaS platform that centralizes tickets, scripts, evidence, automation, and technician workflows. Built for managed service providers, internal IT teams, and solo technicians who are tired of stitching together five disconnected tools.
+
+> Tech Deck is part of the **Shotgun Ninjas Productions** product ecosystem. See [ecosystem](#ecosystem) below for sister platforms.
+
+---
+
+## Ecosystem
+
+Tech Deck is one focused tool in the Shotgun Ninjas Productions suite. Each product solves a specific operational problem; they are designed to interoperate but stand alone.
+
+| Product | Domain | What it does |
+|---|---|---|
+| **Tech Deck** *(this app)* | techdeck.app | IT operations cockpit — tickets, evidence, automation, audit |
+| TradeFlowKit | tradeflowkit.com | Business ops — leads → quotes → jobs → invoices pipeline |
+| TorqueShed | torqueshed.pro | Automotive diagnostics, repair cases, mechanic community |
+| PulseDesk | pulsedesk.support | Healthcare operations coordination |
+| FaultlineLab | faultlinelab.com | Diagnostic challenges & technical problem-solving training |
+| ShotgunNinjaVillage | shotgunninjavillage.com | Community, games, merch, creator content |
+| ShotgunNinjas.com | shotgunninjas.com | Ecosystem hub — full catalog and brand home |
+
+**Natural pairings for Tech Deck users:**
+- **TradeFlowKit** — for IT shops that also need to run sales/quoting/invoicing
+- **FaultlineLab** — to train and certify bench techs on real diagnostic scenarios
+- **ShotgunNinjas.com** — the central brand hub
 
 ---
 

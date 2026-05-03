@@ -258,6 +258,7 @@ export default function LandingPage() {
             <a href="#use-cases" className="hover:text-foreground transition-colors" data-testid="link-nav-use-cases">Use Cases</a>
             <a href="#pricing" className="hover:text-foreground transition-colors" data-testid="link-nav-pricing">Pricing</a>
             <a href="#faq" className="hover:text-foreground transition-colors" data-testid="link-nav-faq">FAQ</a>
+            <a href="#ecosystem" className="hover:text-foreground transition-colors" data-testid="link-nav-ecosystem">Ecosystem</a>
           </nav>
           <div className="flex items-center gap-2">
             <ThemeToggle />
@@ -546,6 +547,83 @@ export default function LandingPage() {
                 </AccordionItem>
               ))}
             </Accordion>
+          </div>
+        </section>
+
+        {/* Ecosystem */}
+        <section id="ecosystem" className="py-20 px-6 bg-card/40 border-y">
+          <div className="max-w-5xl mx-auto">
+            <div className="text-center mb-10">
+              <Badge variant="outline" className="mb-3">The Ecosystem</Badge>
+              <h2 className="text-3xl font-bold tracking-tight mb-3">
+                Part of the Shotgun Ninjas stack
+              </h2>
+              <p className="text-muted-foreground max-w-2xl mx-auto">
+                Tech Deck is one product in a focused suite of operational tools. If your work spans more than just IT, here are the sister platforms worth a look.
+              </p>
+            </div>
+            <div className="grid md:grid-cols-3 gap-4">
+              <a
+                href="https://tradeflowkit.com"
+                target="_blank"
+                rel="noreferrer"
+                className="block hover-elevate rounded-lg"
+                data-testid="link-ecosystem-tradeflowkit"
+              >
+                <Card>
+                  <CardContent className="p-6">
+                    <Badge variant="secondary" className="mb-3 text-xs">Business Ops</Badge>
+                    <h3 className="font-semibold mb-2">TradeFlowKit</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+                      Leads, quotes, jobs, invoices, and follow-ups in one revenue pipeline. Pair with Tech Deck for IT shops that need both technical ops and business flow.
+                    </p>
+                    <span className="text-xs text-primary inline-flex items-center gap-1">
+                      tradeflowkit.com <ArrowRight className="w-3 h-3" />
+                    </span>
+                  </CardContent>
+                </Card>
+              </a>
+              <a
+                href="https://faultlinelab.com"
+                target="_blank"
+                rel="noreferrer"
+                className="block hover-elevate rounded-lg"
+                data-testid="link-ecosystem-faultlinelab"
+              >
+                <Card>
+                  <CardContent className="p-6">
+                    <Badge variant="secondary" className="mb-3 text-xs">Diagnostic Training</Badge>
+                    <h3 className="font-semibold mb-2">FaultlineLab</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+                      Diagnostic challenges, fault analysis, and high-pressure technical scenarios. Sharpen the troubleshooting muscle your bench techs use every day.
+                    </p>
+                    <span className="text-xs text-primary inline-flex items-center gap-1">
+                      faultlinelab.com <ArrowRight className="w-3 h-3" />
+                    </span>
+                  </CardContent>
+                </Card>
+              </a>
+              <a
+                href="https://shotgunninjas.com"
+                target="_blank"
+                rel="noreferrer"
+                className="block hover-elevate rounded-lg"
+                data-testid="link-ecosystem-shotgunninjas"
+              >
+                <Card>
+                  <CardContent className="p-6">
+                    <Badge variant="secondary" className="mb-3 text-xs">Ecosystem Hub</Badge>
+                    <h3 className="font-semibold mb-2">ShotgunNinjas.com</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+                      The full Shotgun Ninjas Productions catalog — software, security, creator tools, music, and experimental tech under one roof.
+                    </p>
+                    <span className="text-xs text-primary inline-flex items-center gap-1">
+                      shotgunninjas.com <ArrowRight className="w-3 h-3" />
+                    </span>
+                  </CardContent>
+                </Card>
+              </a>
+            </div>
           </div>
         </section>
 
