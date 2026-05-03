@@ -164,7 +164,7 @@ export function registerSecureIntakeRoutes(app: Express) {
         status: z.enum(["active", "archived"]).optional(),
       }).parse(req.body);
 
-      const space = await storage.updateIntakeSpace(tenantId, req.params.id, body);
+      const space = await storage.updateIntakeSpace(tenantId, (req.params.id as string), body);
       if (!space) return res.status(404).json({ message: "Space not found" });
       await logIntakeAudit(tenantId, "space.updated", req, { objectType: "space", objectId: space.id, metadata: body });
       await emitEvent("intake.space.updated", tenantId, userId, "intake_space", space.id, { changes: Object.keys(body) });
@@ -178,11 +178,11 @@ export function registerSecureIntakeRoutes(app: Express) {
   app.delete("/api/secure-intake/spaces/:id", ...intakeWriteAdmin, async (req: Request, res: Response) => {
     try {
       const { tenantId, userId } = (req as any).tenantCtx;
-      const space = await storage.getIntakeSpaceById(tenantId, req.params.id);
+      const space = await storage.getIntakeSpaceById(tenantId, (req.params.id as string));
       if (!space) return res.status(404).json({ message: "Space not found" });
-      await storage.deleteIntakeSpace(tenantId, req.params.id);
-      await logIntakeAudit(tenantId, "space.deleted", req, { objectType: "space", objectId: req.params.id, metadata: { spaceName: space.name } });
-      await emitEvent("intake.space.deleted", tenantId, userId, "intake_space", req.params.id, { name: space.name });
+      await storage.deleteIntakeSpace(tenantId, (req.params.id as string));
+      await logIntakeAudit(tenantId, "space.deleted", req, { objectType: "space", objectId: (req.params.id as string), metadata: { spaceName: space.name } });
+      await emitEvent("intake.space.deleted", tenantId, userId, "intake_space", (req.params.id as string), { name: space.name });
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ message: "Failed to delete space" });
@@ -278,13 +278,13 @@ export function registerSecureIntakeRoutes(app: Express) {
   app.post("/api/secure-intake/requests/:id/revoke", ...intakeWriteTech, async (req: Request, res: Response) => {
     try {
       const { tenantId, userId } = (req as any).tenantCtx;
-      const existing = await storage.getUploadRequestById(tenantId, req.params.id);
+      const existing = await storage.getUploadRequestById(tenantId, (req.params.id as string));
       if (!existing) return res.status(404).json({ message: "Upload request not found" });
       if (existing.status !== "active") return res.status(400).json({ message: "Only active requests can be revoked" });
 
-      await storage.revokeUploadRequest(tenantId, req.params.id);
-      await logIntakeAudit(tenantId, "request.revoked", req, { objectType: "upload_request", objectId: req.params.id, metadata: { title: existing.title } });
-      await emitEvent("intake.request.revoked", tenantId, userId, "upload_request", req.params.id, { title: existing.title });
+      await storage.revokeUploadRequest(tenantId, (req.params.id as string));
+      await logIntakeAudit(tenantId, "request.revoked", req, { objectType: "upload_request", objectId: (req.params.id as string), metadata: { title: existing.title } });
+      await emitEvent("intake.request.revoked", tenantId, userId, "upload_request", (req.params.id as string), { title: existing.title });
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ message: "Failed to revoke request" });
@@ -309,7 +309,7 @@ export function registerSecureIntakeRoutes(app: Express) {
   app.get("/api/secure-intake/files/:id/download", ...intakeReadTech, async (req: Request, res: Response) => {
     try {
       const { tenantId, userId } = (req as any).tenantCtx;
-      const file = await storage.getIntakeFileById(tenantId, req.params.id);
+      const file = await storage.getIntakeFileById(tenantId, (req.params.id as string));
       if (!file) return res.status(404).json({ message: "File not found" });
 
       const buffer = await fileStorage.read(file.storagePath);
@@ -340,7 +340,7 @@ export function registerSecureIntakeRoutes(app: Express) {
         updates.reviewedAt = new Date();
       }
 
-      const file = await storage.updateIntakeFile(tenantId, req.params.id, updates);
+      const file = await storage.updateIntakeFile(tenantId, (req.params.id as string), updates);
       if (!file) return res.status(404).json({ message: "File not found" });
 
       await logIntakeAudit(tenantId, `file.${body.status || "updated"}`, req, { objectType: "file", objectId: file.id, metadata: { status: body.status, fileName: file.originalName } });
@@ -355,13 +355,13 @@ export function registerSecureIntakeRoutes(app: Express) {
   app.delete("/api/secure-intake/files/:id", ...intakeWriteAdmin, async (req: Request, res: Response) => {
     try {
       const { tenantId, userId } = (req as any).tenantCtx;
-      const file = await storage.getIntakeFileById(tenantId, req.params.id);
+      const file = await storage.getIntakeFileById(tenantId, (req.params.id as string));
       if (!file) return res.status(404).json({ message: "File not found" });
 
       await fileStorage.delete(file.storagePath);
-      await storage.deleteIntakeFile(tenantId, req.params.id);
-      await logIntakeAudit(tenantId, "file.deleted", req, { objectType: "file", objectId: req.params.id, metadata: { fileName: file.originalName, sizeBytes: file.sizeBytes } });
-      await emitEvent("intake.file.deleted", tenantId, userId, "intake_file", req.params.id, { fileName: file.originalName });
+      await storage.deleteIntakeFile(tenantId, (req.params.id as string));
+      await logIntakeAudit(tenantId, "file.deleted", req, { objectType: "file", objectId: (req.params.id as string), metadata: { fileName: file.originalName, sizeBytes: file.sizeBytes } });
+      await emitEvent("intake.file.deleted", tenantId, userId, "intake_file", (req.params.id as string), { fileName: file.originalName });
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ message: "Failed to delete file" });
@@ -431,7 +431,7 @@ export function registerSecureIntakeRoutes(app: Express) {
 
   app.get("/api/public/intake/:token", uploadLimiter, async (req: Request, res: Response) => {
     try {
-      const request = await storage.getUploadRequestByToken(req.params.token);
+      const request = await storage.getUploadRequestByToken((req.params.token as string));
       if (!request) return res.status(404).json({ message: "Upload request not found" });
 
       if (request.status === "revoked") return res.status(410).json({ message: "This upload link has been revoked" });
@@ -442,7 +442,7 @@ export function registerSecureIntakeRoutes(app: Express) {
 
       const tenantSub = await storage.getTenantSubscription(request.tenantId);
       const tenant = await storage.getTenantById(request.tenantId);
-      if (!tenant || tenant.deletedAt) return res.status(410).json({ message: "This organization is no longer available" });
+      if (!tenant) return res.status(410).json({ message: "This organization is no longer available" });
       if (tenantSub?.status === "paused") return res.status(503).json({ message: "This service is temporarily unavailable. Please contact the organization." });
 
       const space = await storage.getIntakeSpaceById(request.tenantId, request.spaceId);
@@ -471,7 +471,7 @@ export function registerSecureIntakeRoutes(app: Express) {
 
   app.post("/api/public/intake/:token/verify-password", uploadLimiter, async (req: Request, res: Response) => {
     try {
-      const request = await storage.getUploadRequestByToken(req.params.token);
+      const request = await storage.getUploadRequestByToken((req.params.token as string));
       if (!request || !request.requiresPassword || !request.passwordHash) {
         return res.status(400).json({ message: "Invalid request" });
       }
@@ -482,7 +482,7 @@ export function registerSecureIntakeRoutes(app: Express) {
       }
 
       const tenant = await storage.getTenantById(request.tenantId);
-      if (!tenant || tenant.deletedAt) return res.status(410).json({ message: "This organization is no longer available" });
+      if (!tenant) return res.status(410).json({ message: "This organization is no longer available" });
       const tenantSub = await storage.getTenantSubscription(request.tenantId);
       if (tenantSub?.status === "paused") return res.status(503).json({ message: "This service is temporarily unavailable" });
 
@@ -502,7 +502,7 @@ export function registerSecureIntakeRoutes(app: Express) {
 
   app.post("/api/public/intake/:token/upload", uploadLimiter, upload.array("files", 10), async (req: Request, res: Response) => {
     try {
-      const request = await storage.getUploadRequestByToken(req.params.token);
+      const request = await storage.getUploadRequestByToken((req.params.token as string));
       if (!request) return res.status(404).json({ message: "Upload request not found" });
       if (request.status !== "active") return res.status(410).json({ message: "This upload link is no longer active" });
       if (request.expiresAt && new Date(request.expiresAt) < new Date()) {
@@ -512,7 +512,7 @@ export function registerSecureIntakeRoutes(app: Express) {
       }
 
       const tenant = await storage.getTenantById(request.tenantId);
-      if (!tenant || tenant.deletedAt) return res.status(410).json({ message: "This organization is no longer available" });
+      if (!tenant) return res.status(410).json({ message: "This organization is no longer available" });
 
       const tenantSub = await storage.getTenantSubscription(request.tenantId);
       if (tenantSub?.status === "paused") return res.status(503).json({ message: "This service is temporarily unavailable" });

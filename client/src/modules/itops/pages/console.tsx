@@ -570,8 +570,8 @@ export function ItOpsConsolePage() {
 
       setConversationHistory((prev) => [
         ...prev,
-        { role: "user", content: q.trim() },
-        { role: "assistant", content: accumulated },
+        { role: "user" as const, content: q.trim() },
+        { role: "assistant" as const, content: accumulated },
       ].slice(-20));
     } catch (error: any) {
       toast({
