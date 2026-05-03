@@ -1,34 +1,240 @@
-import { Shield, FileText, Users, Lock, ArrowRight, Database } from "lucide-react";
+import {
+  Shield,
+  FileText,
+  Users,
+  Lock,
+  ArrowRight,
+  Database,
+  Terminal,
+  Ticket,
+  Calendar,
+  Receipt,
+  BookOpen,
+  Webhook,
+  Activity,
+  Zap,
+  CheckCircle2,
+  AlertTriangle,
+  Clock,
+  Building2,
+  Wrench,
+  ShieldCheck,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { ThemeToggle } from "@/components/theme-toggle";
 import heroImage from "@assets/techdeckhero_1771446566988.png";
 import logoImage from "@assets/ShotgunNinjaVaulticon_1770412982737.png";
 
-const features = [
+const painPoints = [
   {
-    icon: FileText,
-    title: "Evidence Management",
+    icon: AlertTriangle,
+    title: "Scripts scattered everywhere",
     description:
-      "Upload, organize, and search evidence files with full metadata tracking. Screenshots, logs, PDFs all in one secure location.",
+      "PowerShell on a desktop. Bash in a Notion page. A USB stick somewhere. Nobody knows which version is current.",
   },
   {
-    icon: Users,
-    title: "Multi-Tenant Teams",
+    icon: Clock,
+    title: "Tickets without context",
     description:
-      "Role-based access control with OWNER, ADMIN, TECH, and CLIENT roles. Manage tickets, invoices, and evidence across isolated workspaces.",
+      "Techs reopen the same case three times because the previous fix, the asset history, and the client notes all live in different tools.",
   },
   {
     icon: Lock,
-    title: "Compliance & Audit",
+    title: "Compliance is a fire drill",
     description:
-      "Every action is logged with a searchable audit trail. Generate compliance reports and maintain full accountability across your organization.",
+      "When the audit hits, you're screen-shotting Slack threads and praying nobody asks for an immutable trail.",
+  },
+];
+
+const features = [
+  {
+    icon: Ticket,
+    title: "Ticketing & SLA",
+    description:
+      "Full ticket lifecycle with SLA profiles, response/resolution clocks, comments, and status indicators.",
   },
   {
-    icon: Database,
-    title: "Asset Tracking",
+    icon: Terminal,
+    title: "IT Ops Console",
     description:
-      "Link evidence to clients, sites, and assets. Build a complete picture of every device and server you manage.",
+      "AI-powered terminal for senior engineers. Quick Fix, Script Builder, Deep Dive, Network Analysis, System Design.",
+  },
+  {
+    icon: FileText,
+    title: "Evidence Vault",
+    description:
+      "Upload, deduplicate (SHA-256), search, and tag screenshots, logs, and PDFs. Linked to clients, sites, and assets.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Secure File Intake",
+    description:
+      "Token-based upload links for clients and external parties. Password-protect, expire, audit, approve.",
+  },
+  {
+    icon: Calendar,
+    title: "Dispatch Calendar",
+    description:
+      "Schedule appointments, weekly grid view, mobile technician view at /m for on-the-road updates.",
+  },
+  {
+    icon: Receipt,
+    title: "Time Tracking & Invoicing",
+    description:
+      "Log time against tickets and clients. Generate invoices, line items, and public invoice views.",
+  },
+  {
+    icon: BookOpen,
+    title: "Knowledge Base",
+    description:
+      "Runbooks, articles, categories, search. The institutional memory your bench techs actually open.",
+  },
+  {
+    icon: Webhook,
+    title: "Webhooks & API",
+    description:
+      "HMAC-signed webhooks, scoped API tokens, status pages. Wire TechDeck into your existing stack.",
+  },
+  {
+    icon: Activity,
+    title: "Audit & Reports",
+    description:
+      "Every action logged. Generate compliance ZIP packets on demand. Built for MSPs that get audited.",
+  },
+];
+
+const useCases = [
+  {
+    icon: Building2,
+    title: "Managed Service Providers",
+    description:
+      "Run dozens of client environments with strict tenant isolation. Role-based access for OWNER, ADMIN, TECH, and CLIENT seats.",
+    bullets: [
+      "Per-client portal with restricted views",
+      "MSP-tier plan with high seat & storage limits",
+      "Webhook + API integrations to your PSA/RMM",
+    ],
+  },
+  {
+    icon: Wrench,
+    title: "Internal IT Teams",
+    description:
+      "Replace the messy mix of spreadsheets, shared drives, and Slack threads with one operational cockpit.",
+    bullets: [
+      "Asset & site tracking with full history",
+      "Knowledge base for internal runbooks",
+      "Audit trail for SOC2 / HIPAA / PCI prep",
+    ],
+  },
+  {
+    icon: Zap,
+    title: "Solo Technicians",
+    description:
+      "Free tier with the technician tools you actually need. Upgrade when the workload demands it.",
+    bullets: [
+      "Mobile view at /m for on-site work",
+      "AI IT Ops Console for fast triage",
+      "Time tracking → invoice in two clicks",
+    ],
+  },
+];
+
+const plans = [
+  {
+    name: "Solo",
+    price: "Free",
+    tagline: "For independent technicians",
+    features: [
+      "Core ticketing & evidence",
+      "Mobile technician view",
+      "1 user, 5 clients",
+      "1 GB evidence storage",
+    ],
+    cta: "Start Free",
+    href: "/register",
+    highlighted: false,
+  },
+  {
+    name: "Pro",
+    price: "$29",
+    period: "/mo",
+    tagline: "For small IT shops",
+    features: [
+      "Everything in Solo",
+      "IT Ops Console (AI)",
+      "Up to 5 users",
+      "25 GB storage + webhooks",
+      "Public status pages",
+    ],
+    cta: "Get Started",
+    href: "/register",
+    highlighted: true,
+  },
+  {
+    name: "MSP",
+    price: "$79",
+    period: "/mo",
+    tagline: "For managed service providers",
+    features: [
+      "Everything in Pro",
+      "Up to 25 users",
+      "100 GB storage",
+      "API access + Secure Intake",
+      "Compliance report packets",
+    ],
+    cta: "Get Started",
+    href: "/register",
+    highlighted: false,
+  },
+];
+
+const stats = [
+  { value: "6", label: "Core modules" },
+  { value: "4", label: "Role tiers" },
+  { value: "100%", label: "Tenant isolated" },
+  { value: "SHA-256", label: "Evidence dedup" },
+];
+
+const faqs = [
+  {
+    q: "Who is Tech Deck built for?",
+    a: "MSPs, internal IT teams, and senior technicians who need ticketing, evidence, automation, and audit in one place — without stitching together five tools.",
+  },
+  {
+    q: "Is there a free plan?",
+    a: "Yes. The Solo plan is free forever and includes core ticketing, evidence management, and the mobile technician view. No credit card required to start.",
+  },
+  {
+    q: "How does multi-tenant isolation work?",
+    a: "Every record is scoped by tenantId at the database and middleware layer. Users in one tenant cannot see, query, or reference data from any other tenant. Period.",
+  },
+  {
+    q: "What is the IT Ops Console?",
+    a: "An AI-powered terminal for senior engineers and MSPs with five modes — Quick Fix, Script Builder, Deep Dive, Network Analysis, and System Design. Streaming responses, syntax-highlighted code, and a local Knowledge Vault to save and tag answers.",
+  },
+  {
+    q: "Do you support compliance audits?",
+    a: "Every state-changing action emits an event into an immutable audit log. The Reports module generates downloadable ZIP packets containing tickets, evidence, and audit trails for any time window.",
+  },
+  {
+    q: "Can clients submit files securely?",
+    a: "Yes. The Secure Intake module gives you tokenized upload links — password-protected, expiring, one-time-use — so external parties can drop files into a controlled space without an account.",
+  },
+  {
+    q: "What about mobile technicians in the field?",
+    a: "There's a dedicated mobile view at /m with bottom-tab navigation for tickets, time tracking, and the dispatch calendar. Built for one-hand use on a phone between jobs.",
+  },
+  {
+    q: "How is billing handled?",
+    a: "Stripe-powered subscriptions with a payment grace period. Plan limits (seats, clients, storage) are enforced server-side. Upgrade or cancel from the in-app billing portal at any time.",
   },
 ];
 
@@ -47,6 +253,12 @@ export default function LandingPage() {
               Tech Deck
             </span>
           </div>
+          <nav className="hidden md:flex items-center gap-6 text-sm text-muted-foreground">
+            <a href="#features" className="hover:text-foreground transition-colors" data-testid="link-nav-features">Features</a>
+            <a href="#use-cases" className="hover:text-foreground transition-colors" data-testid="link-nav-use-cases">Use Cases</a>
+            <a href="#pricing" className="hover:text-foreground transition-colors" data-testid="link-nav-pricing">Pricing</a>
+            <a href="#faq" className="hover:text-foreground transition-colors" data-testid="link-nav-faq">FAQ</a>
+          </nav>
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <Button asChild data-testid="button-login">
@@ -60,6 +272,7 @@ export default function LandingPage() {
       </header>
 
       <main>
+        {/* Hero */}
         <section className="relative overflow-hidden">
           <div
             className="absolute inset-0 bg-cover bg-center bg-no-repeat"
@@ -69,39 +282,107 @@ export default function LandingPage() {
           <div className="relative z-10 flex flex-col min-h-[480px] sm:min-h-[540px] px-6">
             <div className="flex-1" />
             <div className="max-w-3xl mx-auto text-center pb-10 sm:pb-14">
+              <h1 className="sr-only">
+                Tech Deck — IT operations cockpit for MSPs and senior technical teams
+              </h1>
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <Button size="lg" asChild data-testid="button-get-started">
                   <a href="/register">
-                    Get Started
+                    Get Started Free
                     <ArrowRight className="w-4 h-4 ml-1" />
                   </a>
                 </Button>
-                <Button size="lg" variant="outline" asChild className="backdrop-blur-sm bg-white/5 border-white/20 text-white hover:bg-white/15">
-                  <a href="#features">Learn More</a>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  asChild
+                  className="backdrop-blur-sm bg-white/5 border-white/20 text-white hover:bg-white/15"
+                  data-testid="button-learn-more"
+                >
+                  <a href="#features">See What's Inside</a>
                 </Button>
               </div>
               <div className="flex items-center justify-center gap-4 mt-5 text-xs text-white/60">
                 <span>Free plan available</span>
                 <span className="w-1 h-1 rounded-full bg-white/40" />
                 <span>No credit card required</span>
+                <span className="w-1 h-1 rounded-full bg-white/40" />
+                <span>Cancel anytime</span>
               </div>
             </div>
           </div>
         </section>
 
-        <section id="features" className="py-20 px-6 bg-card/50">
+        {/* Stats strip */}
+        <section className="border-y bg-card/30">
+          <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-px bg-border">
+            {stats.map((s) => (
+              <div key={s.label} className="bg-background py-6 px-4 text-center" data-testid={`stat-${s.label.toLowerCase().replace(/\s+/g, "-")}`}>
+                <div className="text-2xl font-bold tracking-tight text-primary">{s.value}</div>
+                <div className="text-xs text-muted-foreground mt-1 uppercase tracking-wider">{s.label}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Problem */}
+        <section className="py-20 px-6">
           <div className="max-w-5xl mx-auto">
             <div className="text-center mb-12">
-              <h2 className="text-2xl font-bold tracking-tight mb-2">
-                Everything you need
+              <Badge variant="outline" className="mb-3">The Problem</Badge>
+              <h2 className="text-3xl font-bold tracking-tight mb-3">
+                IT teams are drowning in disconnected tools.
               </h2>
-              <p className="text-muted-foreground">
-                Built for IT professionals who need accountability.
+              <p className="text-muted-foreground max-w-2xl mx-auto">
+                Tickets in one app. Scripts in another. Evidence on a shared drive. Client notes in a chat thread. Every minute lost to context-switching is a minute the SLA clock keeps running.
               </p>
             </div>
-            <div className="grid sm:grid-cols-2 gap-4">
+            <div className="grid md:grid-cols-3 gap-4">
+              {painPoints.map((p) => (
+                <Card key={p.title} className="hover-elevate" data-testid={`card-pain-${p.title.toLowerCase().replace(/\s+/g, "-")}`}>
+                  <CardContent className="p-6">
+                    <div className="w-10 h-10 rounded-md bg-destructive/10 flex items-center justify-center mb-4">
+                      <p.icon className="w-5 h-5 text-destructive" />
+                    </div>
+                    <h3 className="font-semibold mb-2">{p.title}</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{p.description}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Solution */}
+        <section className="py-20 px-6 bg-card/40 border-y">
+          <div className="max-w-5xl mx-auto">
+            <div className="text-center mb-6">
+              <Badge variant="outline" className="mb-3">The Solution</Badge>
+              <h2 className="text-3xl font-bold tracking-tight mb-3">
+                One cockpit. Every tool a tech actually opens.
+              </h2>
+              <p className="text-muted-foreground max-w-2xl mx-auto">
+                Tech Deck centralizes scripts, endpoint checks, documentation, automation, and technician workflows into a single multi-tenant platform built for MSPs and senior IT teams.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Features */}
+        <section id="features" className="py-20 px-6">
+          <div className="max-w-5xl mx-auto">
+            <div className="text-center mb-12">
+              <Badge variant="outline" className="mb-3">Features</Badge>
+              <h2 className="text-3xl font-bold tracking-tight mb-2">
+                Everything in one stack
+              </h2>
+              <p className="text-muted-foreground">
+                Nine modules. One login. One audit trail. One bill.
+              </p>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {features.map((feature) => (
-                <Card key={feature.title} className="hover-elevate">
+                <Card key={feature.title} className="hover-elevate" data-testid={`card-feature-${feature.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>
                   <CardContent className="p-6">
                     <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center mb-4">
                       <feature.icon className="w-5 h-5 text-primary" />
@@ -117,31 +398,216 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section className="py-20 px-6">
-          <div className="max-w-2xl mx-auto text-center">
+        {/* Use Cases */}
+        <section id="use-cases" className="py-20 px-6 bg-card/40 border-y">
+          <div className="max-w-5xl mx-auto">
+            <div className="text-center mb-12">
+              <Badge variant="outline" className="mb-3">Built For</Badge>
+              <h2 className="text-3xl font-bold tracking-tight mb-2">
+                Whoever's holding the pager
+              </h2>
+              <p className="text-muted-foreground">
+                Solo techs to multi-team MSPs. The same cockpit scales with you.
+              </p>
+            </div>
+            <div className="grid md:grid-cols-3 gap-4">
+              {useCases.map((u) => (
+                <Card key={u.title} className="hover-elevate" data-testid={`card-usecase-${u.title.toLowerCase().replace(/\s+/g, "-")}`}>
+                  <CardContent className="p-6">
+                    <div className="w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center mb-4">
+                      <u.icon className="w-5 h-5 text-primary" />
+                    </div>
+                    <h3 className="font-semibold mb-2">{u.title}</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+                      {u.description}
+                    </p>
+                    <ul className="space-y-2">
+                      {u.bullets.map((b) => (
+                        <li key={b} className="flex items-start gap-2 text-sm">
+                          <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                          <span className="text-muted-foreground">{b}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Pricing */}
+        <section id="pricing" className="py-20 px-6">
+          <div className="max-w-5xl mx-auto">
+            <div className="text-center mb-12">
+              <Badge variant="outline" className="mb-3">Pricing</Badge>
+              <h2 className="text-3xl font-bold tracking-tight mb-2">
+                Pick the tier that fits the workload
+              </h2>
+              <p className="text-muted-foreground">
+                Start free. Upgrade when the bench grows. Cancel any time.
+              </p>
+            </div>
+            <div className="grid md:grid-cols-3 gap-4">
+              {plans.map((plan) => (
+                <Card
+                  key={plan.name}
+                  className={`hover-elevate relative ${plan.highlighted ? "border-primary shadow-lg" : ""}`}
+                  data-testid={`card-plan-${plan.name.toLowerCase()}`}
+                >
+                  {plan.highlighted && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                      <Badge className="bg-primary text-primary-foreground">Most Popular</Badge>
+                    </div>
+                  )}
+                  <CardContent className="p-6">
+                    <div className="mb-4">
+                      <h3 className="font-semibold text-lg">{plan.name}</h3>
+                      <p className="text-xs text-muted-foreground">{plan.tagline}</p>
+                    </div>
+                    <div className="mb-6">
+                      <span className="text-3xl font-bold tracking-tight">{plan.price}</span>
+                      {plan.period && (
+                        <span className="text-sm text-muted-foreground">{plan.period}</span>
+                      )}
+                    </div>
+                    <ul className="space-y-2 mb-6">
+                      {plan.features.map((f) => (
+                        <li key={f} className="flex items-start gap-2 text-sm">
+                          <CheckCircle2 className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+                          <span>{f}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <Button
+                      className="w-full"
+                      variant={plan.highlighted ? "default" : "outline"}
+                      asChild
+                      data-testid={`button-plan-${plan.name.toLowerCase()}`}
+                    >
+                      <a href={plan.href}>{plan.cta}</a>
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+            <p className="text-center text-xs text-muted-foreground mt-6">
+              Need more seats, dedicated support, or on-prem? <a href="mailto:hello@techdeck.app" className="underline hover:text-foreground" data-testid="link-enterprise-contact">Contact us about Enterprise</a>.
+            </p>
+          </div>
+        </section>
+
+        {/* Trust */}
+        <section className="py-16 px-6 bg-card/40 border-y">
+          <div className="max-w-4xl mx-auto text-center">
+            <Badge variant="outline" className="mb-3">Trust</Badge>
             <h2 className="text-2xl font-bold tracking-tight mb-3">
-              Ready to secure your evidence?
+              Built like infrastructure should be built
+            </h2>
+            <div className="grid sm:grid-cols-3 gap-4 mt-8">
+              <div className="flex flex-col items-center gap-2" data-testid="trust-tenant">
+                <Shield className="w-8 h-8 text-primary" />
+                <h3 className="font-semibold text-sm">Tenant-isolated</h3>
+                <p className="text-xs text-muted-foreground">Every query scoped at the middleware layer.</p>
+              </div>
+              <div className="flex flex-col items-center gap-2" data-testid="trust-mfa">
+                <Lock className="w-8 h-8 text-primary" />
+                <h3 className="font-semibold text-sm">MFA + bcrypt</h3>
+                <p className="text-xs text-muted-foreground">TOTP MFA, account lockout, session regeneration on login.</p>
+              </div>
+              <div className="flex flex-col items-center gap-2" data-testid="trust-audit">
+                <Database className="w-8 h-8 text-primary" />
+                <h3 className="font-semibold text-sm">Immutable audit</h3>
+                <p className="text-xs text-muted-foreground">Every state change emits an event. Nothing is lost.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* FAQ */}
+        <section id="faq" className="py-20 px-6">
+          <div className="max-w-3xl mx-auto">
+            <div className="text-center mb-10">
+              <Badge variant="outline" className="mb-3">FAQ</Badge>
+              <h2 className="text-3xl font-bold tracking-tight mb-2">
+                Questions, answered
+              </h2>
+              <p className="text-muted-foreground">
+                Still curious? <a href="mailto:hello@techdeck.app" className="underline hover:text-foreground" data-testid="link-faq-contact">Email us</a>.
+              </p>
+            </div>
+            <Accordion type="single" collapsible className="w-full">
+              {faqs.map((f, i) => (
+                <AccordionItem key={f.q} value={`item-${i}`} data-testid={`faq-item-${i}`}>
+                  <AccordionTrigger className="text-left">{f.q}</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground leading-relaxed">
+                    {f.a}
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </div>
+        </section>
+
+        {/* Final CTA */}
+        <section className="py-20 px-6 bg-gradient-to-b from-card/40 to-background border-t">
+          <div className="max-w-2xl mx-auto text-center">
+            <h2 className="text-3xl font-bold tracking-tight mb-3">
+              Stop juggling tools. Start owning the stack.
             </h2>
             <p className="text-muted-foreground mb-6">
-              Start with a free account and upgrade as your team grows.
+              Spin up a free tenant in under a minute. Bring your team when you're ready.
             </p>
-            <Button size="lg" asChild>
-              <a href="/register">
-                Get Started Free
-                <ArrowRight className="w-4 h-4 ml-1" />
-              </a>
-            </Button>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <Button size="lg" asChild data-testid="button-final-cta-register">
+                <a href="/register">
+                  Get Started Free
+                  <ArrowRight className="w-4 h-4 ml-1" />
+                </a>
+              </Button>
+              <Button size="lg" variant="outline" asChild data-testid="button-final-cta-pricing">
+                <a href="#pricing">View Pricing</a>
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-4">
+              No credit card required &middot; Cancel anytime &middot; Your data, your tenant
+            </p>
           </div>
         </section>
       </main>
 
-      <footer className="border-t py-6 px-6">
-        <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-4 text-xs text-muted-foreground">
-          <span>&copy; {new Date().getFullYear()} Tech Deck</span>
-          <div className="flex items-center gap-3">
-            <a href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</a>
-            <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
-            <a href="/delete-account" className="hover:text-foreground transition-colors">Delete Account</a>
+      <footer className="border-t py-8 px-6 bg-card/30">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+            <div className="flex items-center gap-2">
+              <img
+                src={logoImage}
+                alt="Tech Deck"
+                className="w-6 h-6 rounded object-cover"
+              />
+              <span className="font-semibold text-sm">Tech Deck</span>
+              <span className="text-xs text-muted-foreground hidden sm:inline">&middot; IT operations cockpit for MSPs</span>
+            </div>
+            <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+              <a href="#features" className="hover:text-foreground transition-colors" data-testid="link-footer-features">Features</a>
+              <a href="#pricing" className="hover:text-foreground transition-colors" data-testid="link-footer-pricing">Pricing</a>
+              <a href="#faq" className="hover:text-foreground transition-colors" data-testid="link-footer-faq">FAQ</a>
+              <a href="/login" className="hover:text-foreground transition-colors" data-testid="link-footer-login">Sign in</a>
+              <a href="/register" className="hover:text-foreground transition-colors" data-testid="link-footer-register">Get Started</a>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t text-xs text-muted-foreground">
+            <span>
+              &copy; {new Date().getFullYear()} Tech Deck &middot; Built by{" "}
+              <a href="https://shotgunninjas.com" target="_blank" rel="noreferrer" className="hover:text-foreground transition-colors" data-testid="link-footer-snp">
+                Shotgun Ninjas Productions
+              </a>
+            </span>
+            <div className="flex items-center gap-3">
+              <a href="/privacy" className="hover:text-foreground transition-colors" data-testid="link-footer-privacy">Privacy</a>
+              <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
+<a href="/delete-account" className="hover:text-foreground transition-colors" data-testid="link-footer-delete">Delete Account</a>
+            </div>
           </div>
         </div>
       </footer>

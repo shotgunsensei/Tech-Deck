@@ -15,6 +15,9 @@ Do not make changes to the `server/authz.ts` file.
 ### UI/UX Decisions
 The frontend is built with React, Vite, wouter for routing, TanStack Query for data fetching, shadcn/ui for UI components, and Tailwind CSS for styling. The design focuses on a clean, intuitive, and responsive interface with clear navigation, accessible data presentation, a persistent sidebar, dynamic breadcrumbs, and consistent theming. A dedicated mobile technician view (`/m`) provides a compact, bottom-tab-navigated experience for on-the-go field access to tickets (with CRUD, status changes, comments), time tracking (with quick-log presets and today/week summaries), and the dispatch calendar (day-view timeline with create/edit/delete).
 
+### Landing Page
+Public landing page at `/` is positioned as "IT operations cockpit for MSPs and senior technical teams" (Shotgun Ninjas Productions ecosystem branding). Sections: sticky header with anchor nav (Features/Use Cases/Pricing/FAQ), hero with techdeckhero image and screen-reader h1, stats strip, problem section (3 pain points), solution intro, 9-card feature grid, 3-card use cases (MSPs/Internal IT/Solo), 3-tier pricing preview (Solo Free, Pro $29, MSP $79 — values match `DEFAULT_PLANS` in `server/modules/billing/stripe.ts`), trust section, FAQ accordion (8 items), final CTA, enhanced footer with Shotgun Ninjas Productions attribution. Plan tier numbers (price, users, storage) MUST stay in sync with backend `DEFAULT_PLANS`.
+
 ### Technical Implementations
 The application follows a modular, multi-tenant architecture with strict data isolation (`tenantId` scoping).
 - **Frontend**: React, Vite, wouter, TanStack Query, shadcn/ui, Tailwind CSS.
