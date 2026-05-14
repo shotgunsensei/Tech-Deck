@@ -54,17 +54,25 @@ export type ConsumeResult =
 
 /**
  * Eagerly validate SSO configuration at module load.
- * - If MODULE_SSO_SECRET is set but invalid, throws (server fails to boot — loud, fails closed).
- * - If MODULE_SSO_SECRET is unset, logs a warning and returns null. /sso then returns 503.
- *   This deviates from the strictest reading of the spec (which would crash boot when missing)
- *   in order to keep the existing email/password+TOTP flow working on instances that have not
+ * - If MODULE_SSO_SECRET is set but invalid → throw (server fails to boot, fails closed).
+ * - If MODULE_SSO_SECRET is unset AND MODULE_SSO_DISABLED is not "true" → throw
+ *   (default-secure: instances adopting SSO MUST configure it explicitly).
+ * - If MODULE_SSO_DISABLED=true → log a warning and return null; /sso then returns 503.
+ *   This explicit opt-out exists for development sandboxes / instances that have not
  *   yet adopted SSO. There is no silent unsigned launch — verifyToken always requires HS256.
  */
 function loadConfigAtStartup(): SsoConfig | null {
   const secret = process.env.MODULE_SSO_SECRET;
+  const disabled = process.env.MODULE_SSO_DISABLED === "true";
   if (!secret) {
+    if (!disabled) {
+      throw new Error(
+        "[sso] MODULE_SSO_SECRET is required. To explicitly disable SSO on this instance, " +
+        "set MODULE_SSO_DISABLED=true.",
+      );
+    }
     logger.warn(
-      "[sso] MODULE_SSO_SECRET is not set — OperatorOS SSO is DISABLED. /sso will return 503.",
+      "[sso] MODULE_SSO_DISABLED=true — OperatorOS SSO is DISABLED. /sso will return 503.",
     );
     return null;
   }
@@ -95,6 +103,31 @@ function errMessage(err: unknown): string {
 
 function reject(res: Response, status: number, code: string, message: string) {
   return res.status(status).json({ code, message });
+}
+
+/**
+ * Unified SSO outcome logger. Emits a single log line per /sso request with
+ * a consistent shape — outcome, code, jti, sub — so every accept and reject
+ * path is auditable. Unknown values fall back to "<unverified>" rather than
+ * silently dropping the field.
+ */
+function logSsoOutcome(
+  req: Request,
+  outcome: "accept" | "reject",
+  code: string,
+  ctx: { jti?: string | null; sub?: string | null; userId?: string; tenantId?: string; err?: string } = {},
+) {
+  const payload = {
+    outcome,
+    code,
+    jti: ctx.jti ?? "<unverified>",
+    sub: ctx.sub ?? "<unverified>",
+    ...(ctx.userId ? { userId: ctx.userId } : {}),
+    ...(ctx.tenantId ? { tenantId: ctx.tenantId } : {}),
+    ...(ctx.err ? { err: ctx.err } : {}),
+  };
+  if (outcome === "accept") req.log?.info(payload, "[sso] outcome");
+  else req.log?.warn(payload, "[sso] outcome");
 }
 
 export function verifyToken(token: string, cfg: SsoConfig): VerifyResult {
@@ -221,15 +254,36 @@ export async function findOrCreateSsoUser(
   if (!userRow) {
     const inserted = await db
       .insert(users)
-      .values({ email, ssoSubject: input.ssoSubject })
+      .values({
+        email,
+        ssoSubject: input.ssoSubject,
+        ssoRole: input.role,
+        ssoPlanSlug: input.planSlug,
+        ssoOrganizationId: input.organizationId,
+      })
       .onConflictDoUpdate({
         target: users.ssoSubject,
-        set: { updatedAt: new Date() },
+        set: {
+          email,
+          ssoRole: input.role,
+          ssoPlanSlug: input.planSlug,
+          ssoOrganizationId: input.organizationId,
+          updatedAt: new Date(),
+        },
       })
       .returning();
     userRow = inserted[0];
-  } else if (userRow.email !== email) {
-    await db.update(users).set({ email, updatedAt: new Date() }).where(eq(users.id, userRow.id));
+  } else {
+    await db
+      .update(users)
+      .set({
+        email,
+        ssoRole: input.role,
+        ssoPlanSlug: input.planSlug,
+        ssoOrganizationId: input.organizationId,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userRow.id));
   }
 
   const rawOrg = (input.organizationId || `sub-${input.ssoSubject}`)
@@ -276,22 +330,29 @@ export function registerSsoRoutes(
 ) {
   app.get("/sso", async (req: Request, res: Response) => {
     if (!cfg) {
+      logSsoOutcome(req, "reject", "sso_not_configured");
       return reject(res, 503, "sso_not_configured", "OperatorOS SSO is not configured on this instance");
     }
 
     const token = typeof req.query.token === "string" ? req.query.token : "";
-    if (!token) return reject(res, 400, "missing_token", "Missing token query parameter");
-    if (token.length > 4096) return reject(res, 400, "bad_request", "Token too large");
+    if (!token) {
+      logSsoOutcome(req, "reject", "missing_token");
+      return reject(res, 400, "missing_token", "Missing token query parameter");
+    }
+    if (token.length > 4096) {
+      logSsoOutcome(req, "reject", "bad_request");
+      return reject(res, 400, "bad_request", "Token too large");
+    }
 
     const verified = verifyToken(token, cfg);
     if (!verified.ok) {
-      req.log?.warn({ code: verified.code, jti: "<unverified>" }, "[sso] token verification failed");
+      logSsoOutcome(req, "reject", verified.code);
       return reject(res, verified.status, verified.code, verified.message);
     }
 
     const consumed = await consumeToken(cfg, verified.claims.jti, req.requestId);
     if (!consumed.ok) {
-      req.log?.warn({ code: consumed.code, jti: verified.claims.jti }, "[sso] consume failed");
+      logSsoOutcome(req, "reject", consumed.code, { jti: verified.claims.jti, sub: verified.claims.sub });
       return reject(res, consumed.status, consumed.code, consumed.message);
     }
 
@@ -306,26 +367,34 @@ export function registerSsoRoutes(
         organizationId: verified.claims.organization_id,
       });
     } catch (err) {
-      req.log?.error({ err: errMessage(err) }, "[sso] provisioning failed");
+      logSsoOutcome(req, "reject", "bad_request", {
+        jti: verified.claims.jti, sub: verified.claims.sub, err: errMessage(err),
+      });
       return reject(res, 500, "bad_request", "Failed to provision user");
     }
 
     req.session.regenerate((regenErr) => {
       if (regenErr) {
-        req.log?.error({ err: regenErr.message }, "[sso] session regenerate failed");
+        logSsoOutcome(req, "reject", "bad_request", {
+          jti: verified.claims.jti, sub: verified.claims.sub, err: regenErr.message,
+        });
         return reject(res, 500, "bad_request", "Session error");
       }
       req.session.userId = provisioned.userId;
       req.session.mfaPending = false;
       req.session.save((saveErr) => {
         if (saveErr) {
-          req.log?.error({ err: saveErr.message }, "[sso] session save failed");
+          logSsoOutcome(req, "reject", "bad_request", {
+            jti: verified.claims.jti, sub: verified.claims.sub, err: saveErr.message,
+          });
           return reject(res, 500, "bad_request", "Session error");
         }
-        req.log?.info(
-          { userId: provisioned.userId, tenantId: provisioned.tenantId, jti: verified.claims.jti },
-          "[sso] login success",
-        );
+        logSsoOutcome(req, "accept", "ok", {
+          jti: verified.claims.jti,
+          sub: verified.claims.sub,
+          userId: provisioned.userId,
+          tenantId: provisioned.tenantId,
+        });
         return res.redirect("/");
       });
     });

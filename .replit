@@ -47,3 +47,4 @@ integrations = ["javascript_log_in_with_replit:2.0.0", "javascript_database:1.0.
 APP_URL = "https://07063c1e-c489-40b1-b937-5b954e790cbb-00-1dzjv7l205mxo.worf.replit.dev"
 REVIEWER_USERNAME = "Reviewer"
 REVIEWER_PASSWORD = "Reviewer2026!"
+MODULE_SSO_DISABLED = "true"
