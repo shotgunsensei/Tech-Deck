@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { type Server } from "http";
-import { setupSession, registerAuthRoutes, hydrateUser } from "./auth";
+import { setupSession, registerAuthRoutes, hydrateUser, registerSsoRoutes } from "./auth";
 import { registerCoreRoutes } from "./modules/core/routes";
 import { registerEvidenceRoutes } from "./modules/evidence/routes";
 import { registerLicenseRoutes } from "./modules/license/routes";
@@ -156,6 +156,7 @@ export async function registerRoutes(
     setupSession(app);
     app.use(hydrateUser);
     registerAuthRoutes(app);
+    registerSsoRoutes(app);
     registerReviewerRoutes(app);
     registerAccountRoutes(app);
 
