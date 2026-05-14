@@ -159,16 +159,12 @@ describe("/sso route", () => {
   function buildApp(routeCfg: SsoConfig | null) {
     const app = express();
     app.use(session({ secret: "test-session-secret", resave: false, saveUninitialized: false }));
-    // Stub the storage call so we never hit the DB.
-    vi.doMock("../server/auth/sso", async (orig) => {
-      const mod = await orig<typeof import("../server/auth/sso")>();
-      return { ...mod, findOrCreateSsoUser: async () => ({ userId: "u1", tenantId: "t1" }) };
-    });
-    registerSsoRoutes(app, routeCfg);
+    const provisioner = async () => ({ userId: "u1", tenantId: "t1" });
+    registerSsoRoutes(app, routeCfg, provisioner);
     return app;
   }
 
-  beforeEach(() => { vi.restoreAllMocks(); vi.resetModules(); });
+  beforeEach(() => { vi.restoreAllMocks(); });
 
   it("returns 503 sso_not_configured when MODULE_SSO_SECRET is unset", async () => {
     const app = buildApp(null);

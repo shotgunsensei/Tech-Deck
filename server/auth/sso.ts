@@ -367,27 +367,27 @@ export function registerSsoRoutes(
         organizationId: verified.claims.organization_id,
       });
     } catch (err) {
-      logSsoOutcome(req, "reject", "bad_request", {
+      logSsoOutcome(req, "reject", "server_error", {
         jti: verified.claims.jti, sub: verified.claims.sub, err: errMessage(err),
       });
-      return reject(res, 500, "bad_request", "Failed to provision user");
+      return reject(res, 500, "server_error", "Failed to provision user");
     }
 
     req.session.regenerate((regenErr) => {
       if (regenErr) {
-        logSsoOutcome(req, "reject", "bad_request", {
+        logSsoOutcome(req, "reject", "server_error", {
           jti: verified.claims.jti, sub: verified.claims.sub, err: regenErr.message,
         });
-        return reject(res, 500, "bad_request", "Session error");
+        return reject(res, 500, "server_error", "Session error");
       }
       req.session.userId = provisioned.userId;
       req.session.mfaPending = false;
       req.session.save((saveErr) => {
         if (saveErr) {
-          logSsoOutcome(req, "reject", "bad_request", {
+          logSsoOutcome(req, "reject", "server_error", {
             jti: verified.claims.jti, sub: verified.claims.sub, err: saveErr.message,
           });
-          return reject(res, 500, "bad_request", "Session error");
+          return reject(res, 500, "server_error", "Session error");
         }
         logSsoOutcome(req, "accept", "ok", {
           jti: verified.claims.jti,
