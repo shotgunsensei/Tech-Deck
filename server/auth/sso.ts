@@ -269,7 +269,11 @@ export function getStartupConfig(): SsoConfig | null {
   return startupConfig;
 }
 
-export function registerSsoRoutes(app: Express, cfg: SsoConfig | null = startupConfig) {
+export function registerSsoRoutes(
+  app: Express,
+  cfg: SsoConfig | null = startupConfig,
+  provisioner: (input: FindOrCreateSsoUserInput) => Promise<FindOrCreateSsoUserResult> = findOrCreateSsoUser,
+) {
   app.get("/sso", async (req: Request, res: Response) => {
     if (!cfg) {
       return reject(res, 503, "sso_not_configured", "OperatorOS SSO is not configured on this instance");
@@ -281,7 +285,7 @@ export function registerSsoRoutes(app: Express, cfg: SsoConfig | null = startupC
 
     const verified = verifyToken(token, cfg);
     if (!verified.ok) {
-      req.log?.warn({ code: verified.code }, "[sso] token verification failed");
+      req.log?.warn({ code: verified.code, jti: "<unverified>" }, "[sso] token verification failed");
       return reject(res, verified.status, verified.code, verified.message);
     }
 
@@ -294,7 +298,7 @@ export function registerSsoRoutes(app: Express, cfg: SsoConfig | null = startupC
     const role = ROLE_MAP[(verified.claims.role || "tech").toLowerCase()] || "TECH";
     let provisioned: FindOrCreateSsoUserResult;
     try {
-      provisioned = await findOrCreateSsoUser({
+      provisioned = await provisioner({
         ssoSubject: verified.claims.sub,
         email: verified.claims.email,
         role,

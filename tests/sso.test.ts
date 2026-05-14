@@ -230,6 +230,36 @@ describe("/sso route", () => {
     expect(res.body.code).toBe("sso_consume_unavailable");
   });
 
+  it("happy path: verifies, consumes, mints session, redirects to /", async () => {
+    const provisionSpy = vi.fn(async () => ({ userId: "user-uuid-1", tenantId: "tenant-uuid-1" }));
+    const fetchSpy = vi.fn(async () => ({ status: 200, json: async () => ({}) } as unknown as Response));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const app = express();
+    app.use(session({ secret: "test-session-secret", resave: false, saveUninitialized: false }));
+    const { registerSsoRoutes: register } = await import("../server/auth/sso");
+    register(app, cfg, provisionSpy);
+
+    const tok = makeToken({ jti: "happy-path-jti" });
+    const res = await request(app).get(`/sso?token=${tok}`);
+
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe("/");
+    const cookies = res.headers["set-cookie"] as unknown as string[] | undefined;
+    expect(cookies).toBeDefined();
+    expect(cookies!.some((c) => c.startsWith("connect.sid="))).toBe(true);
+    expect(provisionSpy).toHaveBeenCalledWith(expect.objectContaining({
+      ssoSubject: "user-123",
+      email: "alice@example.com",
+      role: "ADMIN",
+      organizationId: "acme",
+      planSlug: "pro",
+    }));
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const consumeBody = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
+    expect(consumeBody).toEqual({ jti: "happy-path-jti", aud: MODULE_SLUG, env: "test" });
+  });
+
   it("never echoes the JWT secret in any response body", async () => {
     const app = buildApp(cfg);
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("net"); }));
