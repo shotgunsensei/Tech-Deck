@@ -5,7 +5,7 @@ import { users } from "@shared/models/auth";
 import { tenants, tenantMembers } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { logger } from "../logger";
-import { renderSsoErrorPage } from "./ssoErrorPage";
+import { renderSsoErrorPage, ssoErrorPageOptionsFromRequest } from "./ssoErrorPage";
 
 export const MODULE_SLUG = "techdeck";
 const ISSUER = "operatoros";
@@ -122,7 +122,7 @@ function reject(
   cfg: SsoConfig | null,
 ) {
   if (wantsHtml(req)) {
-    const html = renderSsoErrorPage(code, message, cfg?.baseUrl);
+    const html = renderSsoErrorPage(code, message, cfg?.baseUrl, ssoErrorPageOptionsFromRequest(req));
     res.status(status).type("html").send(html);
     return;
   }

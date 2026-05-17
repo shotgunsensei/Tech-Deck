@@ -4,6 +4,7 @@ import session from "express-session";
 import request from "supertest";
 import jwt, { type Algorithm } from "jsonwebtoken";
 import { verifyToken, consumeToken, registerSsoRoutes, MODULE_SLUG, type SsoConfig } from "../server/auth/sso";
+import { renderSsoErrorPage, pickLanguage } from "../server/auth/ssoErrorPage";
 
 const SECRET = "x".repeat(32);
 const cfg: SsoConfig = {
@@ -391,5 +392,131 @@ describe("findOrCreateSsoUser concurrent provisioning", () => {
     // (the second hits ON CONFLICT DO NOTHING and returns silently).
     expect(memberInsertAttempts.length).toBe(2);
     expect(memberExists).toBe(true);
+  });
+});
+
+describe("ssoErrorPage localization", () => {
+  describe("pickLanguage", () => {
+    it("defaults to English when no signals are provided", () => {
+      expect(pickLanguage(undefined)).toBe("en");
+      expect(pickLanguage("")).toBe("en");
+    });
+
+    it("honors an explicit override over Accept-Language", () => {
+      expect(pickLanguage("en-US,en;q=0.9", "es")).toBe("es");
+    });
+
+    it("falls back to English for an unsupported override", () => {
+      expect(pickLanguage("en-US", "zz")).toBe("en");
+    });
+
+    it("matches a region-tagged Accept-Language to its primary subtag", () => {
+      expect(pickLanguage("es-MX,es;q=0.9")).toBe("es");
+    });
+
+    it("respects q-values when picking from Accept-Language", () => {
+      // Spanish has higher q than English, so es wins.
+      expect(pickLanguage("en;q=0.2, es;q=0.9")).toBe("es");
+    });
+
+    it("falls back to English when no Accept-Language entry is supported", () => {
+      expect(pickLanguage("fr-FR,fr;q=0.9,de;q=0.5")).toBe("en");
+    });
+  });
+
+  describe("renderSsoErrorPage", () => {
+    it("renders English copy by default", () => {
+      const html = renderSsoErrorPage("expired", "Token expired", "https://operatoros.example");
+      expect(html).toContain('<html lang="en">');
+      expect(html).toContain("Your sign-in link has expired");
+      expect(html).toContain("Return to OperatorOS");
+      expect(html).toContain("Error code: expired");
+    });
+
+    it("renders Spanish copy when Accept-Language prefers es", () => {
+      const html = renderSsoErrorPage(
+        "expired",
+        "Token expired",
+        "https://operatoros.example",
+        { acceptLanguage: "es-MX,es;q=0.9,en;q=0.5" },
+      );
+      expect(html).toContain('<html lang="es">');
+      expect(html).toContain("Tu enlace de inicio de sesión ha caducado");
+      expect(html).toContain("Volver a OperatorOS");
+      expect(html).toContain("Código de error: expired");
+    });
+
+    it("renders the localized fallback when the code is unknown", () => {
+      const html = renderSsoErrorPage(
+        "totally_unknown_code",
+        "boom",
+        "https://operatoros.example",
+        { acceptLanguage: "es" },
+      );
+      expect(html).toContain("No pudimos completar tu inicio de sesión");
+    });
+
+    it("translates every reject code in Spanish (no English bleed-through)", () => {
+      const codes = [
+        "missing_token",
+        "bad_request",
+        "signature_invalid",
+        "issuer_mismatch",
+        "audience_mismatch",
+        "env_mismatch",
+        "expired",
+        "clock_skew",
+        "consume_failed",
+        "sso_consume_unavailable",
+        "sso_not_configured",
+        "server_error",
+      ];
+      for (const code of codes) {
+        const en = renderSsoErrorPage(code, "msg", "https://o.example", { acceptLanguage: "en" });
+        const es = renderSsoErrorPage(code, "msg", "https://o.example", { acceptLanguage: "es" });
+        // Title and body for each code should differ between locales.
+        const enTitle = /<h1[^>]*>([^<]+)<\/h1>/.exec(en)?.[1];
+        const esTitle = /<h1[^>]*>([^<]+)<\/h1>/.exec(es)?.[1];
+        expect(enTitle, `EN title for ${code}`).toBeTruthy();
+        expect(esTitle, `ES title for ${code}`).toBeTruthy();
+        expect(esTitle, `${code} should be translated`).not.toBe(enTitle);
+      }
+    });
+
+    it("prefers the lang override over Accept-Language", () => {
+      const html = renderSsoErrorPage(
+        "expired",
+        "Token expired",
+        "https://operatoros.example",
+        { acceptLanguage: "en-US,en;q=0.9", langOverride: "es" },
+      );
+      expect(html).toContain('<html lang="es">');
+      expect(html).toContain("Volver a OperatorOS");
+    });
+  });
+
+  describe("/sso route locale negotiation", () => {
+    it("returns a Spanish HTML error page when Accept-Language prefers es", async () => {
+      const app = express();
+      registerSsoRoutes(app, cfg);
+      const res = await request(app)
+        .get("/sso")
+        .set("Accept", "text/html")
+        .set("Accept-Language", "es-MX,es;q=0.9,en;q=0.5");
+      expect(res.status).toBe(400);
+      expect(res.text).toContain('<html lang="es">');
+      expect(res.text).toContain("Volver a OperatorOS");
+    });
+
+    it("honors a ?lang= query override on the HTML error page", async () => {
+      const app = express();
+      registerSsoRoutes(app, cfg);
+      const res = await request(app)
+        .get("/sso?lang=es")
+        .set("Accept", "text/html")
+        .set("Accept-Language", "en-US,en;q=0.9");
+      expect(res.status).toBe(400);
+      expect(res.text).toContain('<html lang="es">');
+    });
   });
 });
