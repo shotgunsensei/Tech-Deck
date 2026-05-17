@@ -518,5 +518,25 @@ describe("ssoErrorPage localization", () => {
       expect(res.status).toBe(400);
       expect(res.text).toContain('<html lang="es">');
     });
+
+    it("prefers the JWT `lang` claim over Accept-Language and ?lang=", async () => {
+      // The verified JWT lang claim is the most reliable signal of the user's
+      // preferred language (it reflects what they picked in OperatorOS), so
+      // it must win over both Accept-Language and the ?lang= query override.
+      const app = express();
+      app.use(session({ secret: "test-session-secret", resave: false, saveUninitialized: false }));
+      registerSsoRoutes(app, cfg, async () => ({ userId: "u1", tenantId: "t1" }));
+      // Upstream consume replays the jti → we render an error page AFTER verifyToken,
+      // which is exactly where the claim's lang becomes available.
+      vi.stubGlobal("fetch", vi.fn(async () => ({ status: 409, json: async () => ({ error: "TOKEN_REPLAYED" }) } as unknown as Response)));
+      const tok = makeToken({ lang: "es" });
+      const res = await request(app)
+        .get(`/sso?token=${tok}&lang=en`)
+        .set("Accept", "text/html")
+        .set("Accept-Language", "en-US,en;q=0.9");
+      expect(res.status).toBe(401);
+      expect(res.text).toContain('<html lang="es">');
+      expect(res.text).toContain("El enlace de inicio de sesión ya se ha usado");
+    });
   });
 });

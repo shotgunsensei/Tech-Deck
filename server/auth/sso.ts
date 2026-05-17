@@ -40,6 +40,7 @@ export interface SsoClaims extends JwtPayload {
   module_slug: string;
   plan_slug?: string;
   organization_id?: string;
+  lang?: string;
   jti: string;
   iat: number;
   exp: number;
@@ -120,9 +121,16 @@ function reject(
   code: string,
   message: string,
   cfg: SsoConfig | null,
+  claimLang?: string,
 ) {
   if (wantsHtml(req)) {
-    const html = renderSsoErrorPage(code, message, cfg?.baseUrl, ssoErrorPageOptionsFromRequest(req));
+    // A verified JWT `lang` claim is the most reliable signal of the user's
+    // preferred language — it reflects what they picked in OperatorOS — so it
+    // wins over `?lang=` and `Accept-Language`. Only forwarded after
+    // verifyToken succeeds; we never trust an unsigned token's lang claim.
+    const baseOpts = ssoErrorPageOptionsFromRequest(req);
+    const opts = claimLang ? { ...baseOpts, langOverride: claimLang } : baseOpts;
+    const html = renderSsoErrorPage(code, message, cfg?.baseUrl, opts);
     res.status(status).type("html").send(html);
     return;
   }
@@ -375,10 +383,12 @@ export function registerSsoRoutes(
       return reject(req, res, verified.status, verified.code, verified.message, cfg);
     }
 
+    const claimLang = typeof verified.claims.lang === "string" ? verified.claims.lang : undefined;
+
     const consumed = await consumeToken(cfg, verified.claims.jti, req.requestId);
     if (!consumed.ok) {
       logSsoOutcome(req, "reject", consumed.code, { jti: verified.claims.jti, sub: verified.claims.sub });
-      return reject(req, res, consumed.status, consumed.code, consumed.message, cfg);
+      return reject(req, res, consumed.status, consumed.code, consumed.message, cfg, claimLang);
     }
 
     const role = ROLE_MAP[(verified.claims.role || "tech").toLowerCase()] || "TECH";
@@ -395,7 +405,7 @@ export function registerSsoRoutes(
       logSsoOutcome(req, "reject", "server_error", {
         jti: verified.claims.jti, sub: verified.claims.sub, err: errMessage(err),
       });
-      return reject(req, res, 500, "server_error", "Failed to provision user", cfg);
+      return reject(req, res, 500, "server_error", "Failed to provision user", cfg, claimLang);
     }
 
     req.session.regenerate((regenErr) => {
@@ -403,7 +413,7 @@ export function registerSsoRoutes(
         logSsoOutcome(req, "reject", "server_error", {
           jti: verified.claims.jti, sub: verified.claims.sub, err: regenErr.message,
         });
-        return reject(req, res, 500, "server_error", "Session error", cfg);
+        return reject(req, res, 500, "server_error", "Session error", cfg, claimLang);
       }
       req.session.userId = provisioned.userId;
       req.session.mfaPending = false;
@@ -412,7 +422,7 @@ export function registerSsoRoutes(
           logSsoOutcome(req, "reject", "server_error", {
             jti: verified.claims.jti, sub: verified.claims.sub, err: saveErr.message,
           });
-          return reject(req, res, 500, "server_error", "Session error", cfg);
+          return reject(req, res, 500, "server_error", "Session error", cfg, claimLang);
         }
         logSsoOutcome(req, "accept", "ok", {
           jti: verified.claims.jti,
