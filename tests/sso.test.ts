@@ -263,3 +263,90 @@ describe("/sso route", () => {
     expect(JSON.stringify(res.body)).not.toContain(SECRET);
   });
 });
+
+describe("findOrCreateSsoUser concurrent provisioning", () => {
+  beforeEach(() => { vi.resetModules(); });
+
+  it("two simultaneous calls for the same new user both succeed, no duplicate member rows", async () => {
+    // Simulate two concurrent transactions racing to provision the same brand-new SSO user.
+    // Caller A "wins" every insert; caller B sees ON CONFLICT DO NOTHING return empty
+    // and falls back to a follow-up SELECT — exactly the race the production code now handles.
+    const TENANT_ID = "tenant-shared-uuid";
+    const USER_ID = "user-shared-uuid";
+
+    let tenantExists = false;
+    let memberExists = false;
+    const memberInsertAttempts: number[] = [];
+
+    function makeTx() {
+      const tx = {
+        insert: (table: { _: { name?: string } } | unknown) => {
+          const tableName = (table as { [k: string]: unknown })[
+            Object.getOwnPropertySymbols(table as object).find(
+              (s) => s.description === "drizzle:Name",
+            ) as symbol
+          ] as string | undefined;
+          return {
+            values: (_v: unknown) => ({
+              onConflictDoUpdate: (_o: unknown) => ({
+                returning: async () => [{ id: USER_ID, email: "alice@example.com" }],
+              }),
+              onConflictDoNothing: (_o?: unknown) => {
+                if (tableName === "tenants") {
+                  if (tenantExists) {
+                    return { returning: async () => [] };
+                  }
+                  tenantExists = true;
+                  return { returning: async () => [{ id: TENANT_ID, slug: "os-acme" }] };
+                }
+                if (tableName === "tenant_members") {
+                  memberInsertAttempts.push(Date.now());
+                  if (memberExists) {
+                    return Promise.resolve([]);
+                  }
+                  memberExists = true;
+                  return Promise.resolve([{ id: "member-1" }]);
+                }
+                return { returning: async () => [] };
+              },
+            }),
+          };
+        },
+        select: () => ({
+          from: (_t: unknown) => ({
+            where: async () => (tenantExists ? [{ id: TENANT_ID, slug: "os-acme" }] : []),
+          }),
+        }),
+      };
+      return tx;
+    }
+
+    vi.doMock("../server/db", () => ({
+      db: {
+        transaction: async <T,>(fn: (tx: ReturnType<typeof makeTx>) => Promise<T>) => fn(makeTx()),
+      },
+    }));
+
+    const { findOrCreateSsoUser } = await import("../server/auth/sso");
+
+    const input = {
+      ssoSubject: "sub-race",
+      email: "alice@example.com",
+      role: "ADMIN" as const,
+      planSlug: "pro",
+      organizationId: "acme",
+    };
+
+    const [a, b] = await Promise.all([
+      findOrCreateSsoUser(input),
+      findOrCreateSsoUser(input),
+    ]);
+
+    expect(a).toEqual({ userId: USER_ID, tenantId: TENANT_ID });
+    expect(b).toEqual({ userId: USER_ID, tenantId: TENANT_ID });
+    // Both transactions attempted the membership insert, but only one row was created
+    // (the second hits ON CONFLICT DO NOTHING and returns silently).
+    expect(memberInsertAttempts.length).toBe(2);
+    expect(memberExists).toBe(true);
+  });
+});

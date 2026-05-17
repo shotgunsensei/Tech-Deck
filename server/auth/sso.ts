@@ -3,7 +3,7 @@ import jwt, { type JwtPayload, type Algorithm } from "jsonwebtoken";
 import { db } from "../db";
 import { users } from "@shared/models/auth";
 import { tenants, tenantMembers } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { logger } from "../logger";
 
 export const MODULE_SLUG = "techdeck";
@@ -249,10 +249,19 @@ export async function findOrCreateSsoUser(
   input: FindOrCreateSsoUserInput,
 ): Promise<FindOrCreateSsoUserResult> {
   const email = input.email.toLowerCase();
+  const rawOrg = (input.organizationId || `sub-${input.ssoSubject}`)
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-")
+    .slice(0, 50);
+  const orgSlug = `os-${rawOrg}`;
 
-  let [userRow] = await db.select().from(users).where(eq(users.ssoSubject, input.ssoSubject));
-  if (!userRow) {
-    const inserted = await db
+  // Wrap the whole provision flow in a single transaction so that concurrent
+  // /sso redirects for the same brand-new user can't race each other into
+  // unique-constraint violations. Each insert uses ON CONFLICT so the loser of
+  // any race silently falls back to the already-committed row.
+  return await db.transaction(async (tx) => {
+    // ---- Users: upsert keyed on sso_subject (unique). ----
+    const upsertedUsers = await tx
       .insert(users)
       .values({
         email,
@@ -272,51 +281,43 @@ export async function findOrCreateSsoUser(
         },
       })
       .returning();
-    userRow = inserted[0];
-  } else {
-    await db
-      .update(users)
-      .set({
-        email,
-        ssoRole: input.role,
-        ssoPlanSlug: input.planSlug,
-        ssoOrganizationId: input.organizationId,
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, userRow.id));
-  }
+    const userRow = upsertedUsers[0];
 
-  const rawOrg = (input.organizationId || `sub-${input.ssoSubject}`)
-    .toLowerCase()
-    .replace(/[^a-z0-9-]/g, "-")
-    .slice(0, 50);
-  const orgSlug = `os-${rawOrg}`;
-  let [tenant] = await db.select().from(tenants).where(eq(tenants.slug, orgSlug));
-  if (!tenant) {
-    const created = await db
+    // ---- Tenants: insert-or-select on the unique slug. ----
+    const insertedTenants = await tx
       .insert(tenants)
       .values({
         name: input.organizationId || email,
         slug: orgSlug,
         plan: input.planSlug || "free",
       })
+      .onConflictDoNothing({ target: tenants.slug })
       .returning();
-    tenant = created[0];
-  }
+    let tenant = insertedTenants[0];
+    if (!tenant) {
+      const existing = await tx
+        .select()
+        .from(tenants)
+        .where(eq(tenants.slug, orgSlug));
+      tenant = existing[0];
+    }
+    if (!tenant) {
+      // Should be unreachable: either we inserted, or a concurrent inserter committed first.
+      throw new Error("[sso] failed to load tenant after upsert");
+    }
 
-  const member = await db
-    .select()
-    .from(tenantMembers)
-    .where(and(eq(tenantMembers.tenantId, tenant.id), eq(tenantMembers.userId, userRow.id)));
-  if (member.length === 0) {
-    await db.insert(tenantMembers).values({
-      tenantId: tenant.id,
-      userId: userRow.id,
-      role: input.role,
-    });
-  }
+    // ---- Membership: insert-or-ignore on the (tenant_id, user_id) unique index. ----
+    await tx
+      .insert(tenantMembers)
+      .values({
+        tenantId: tenant.id,
+        userId: userRow.id,
+        role: input.role,
+      })
+      .onConflictDoNothing();
 
-  return { userId: userRow.id, tenantId: tenant.id };
+    return { userId: userRow.id, tenantId: tenant.id };
+  });
 }
 
 export function getStartupConfig(): SsoConfig | null {
