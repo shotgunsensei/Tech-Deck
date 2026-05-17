@@ -5,6 +5,7 @@ import { users } from "@shared/models/auth";
 import { tenants, tenantMembers } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { logger } from "../logger";
+import { renderSsoErrorPage } from "./ssoErrorPage";
 
 export const MODULE_SLUG = "techdeck";
 const ISSUER = "operatoros";
@@ -101,7 +102,30 @@ function errMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-function reject(res: Response, status: number, code: string, message: string) {
+function wantsHtml(req: Request): boolean {
+  const accept = req.headers.accept;
+  if (typeof accept !== "string" || accept.length === 0) return false;
+  // Use express's q-value-aware negotiator. When the client lists both
+  // html and json, whichever has the higher q-value wins; ties resolve
+  // in the order listed in the `types` argument below — so JSON is the
+  // tiebreaker to keep API clients on the JSON contract.
+  const best = req.accepts(["application/json", "text/html"]);
+  return best === "text/html";
+}
+
+function reject(
+  req: Request,
+  res: Response,
+  status: number,
+  code: string,
+  message: string,
+  cfg: SsoConfig | null,
+) {
+  if (wantsHtml(req)) {
+    const html = renderSsoErrorPage(code, message, cfg?.baseUrl);
+    res.status(status).type("html").send(html);
+    return;
+  }
   return res.status(status).json({ code, message });
 }
 
@@ -332,29 +356,29 @@ export function registerSsoRoutes(
   app.get("/sso", async (req: Request, res: Response) => {
     if (!cfg) {
       logSsoOutcome(req, "reject", "sso_not_configured");
-      return reject(res, 503, "sso_not_configured", "OperatorOS SSO is not configured on this instance");
+      return reject(req, res, 503, "sso_not_configured", "OperatorOS SSO is not configured on this instance", cfg);
     }
 
     const token = typeof req.query.token === "string" ? req.query.token : "";
     if (!token) {
       logSsoOutcome(req, "reject", "missing_token");
-      return reject(res, 400, "missing_token", "Missing token query parameter");
+      return reject(req, res, 400, "missing_token", "Missing token query parameter", cfg);
     }
     if (token.length > 4096) {
       logSsoOutcome(req, "reject", "bad_request");
-      return reject(res, 400, "bad_request", "Token too large");
+      return reject(req, res, 400, "bad_request", "Token too large", cfg);
     }
 
     const verified = verifyToken(token, cfg);
     if (!verified.ok) {
       logSsoOutcome(req, "reject", verified.code);
-      return reject(res, verified.status, verified.code, verified.message);
+      return reject(req, res, verified.status, verified.code, verified.message, cfg);
     }
 
     const consumed = await consumeToken(cfg, verified.claims.jti, req.requestId);
     if (!consumed.ok) {
       logSsoOutcome(req, "reject", consumed.code, { jti: verified.claims.jti, sub: verified.claims.sub });
-      return reject(res, consumed.status, consumed.code, consumed.message);
+      return reject(req, res, consumed.status, consumed.code, consumed.message, cfg);
     }
 
     const role = ROLE_MAP[(verified.claims.role || "tech").toLowerCase()] || "TECH";
@@ -371,7 +395,7 @@ export function registerSsoRoutes(
       logSsoOutcome(req, "reject", "server_error", {
         jti: verified.claims.jti, sub: verified.claims.sub, err: errMessage(err),
       });
-      return reject(res, 500, "server_error", "Failed to provision user");
+      return reject(req, res, 500, "server_error", "Failed to provision user", cfg);
     }
 
     req.session.regenerate((regenErr) => {
@@ -379,7 +403,7 @@ export function registerSsoRoutes(
         logSsoOutcome(req, "reject", "server_error", {
           jti: verified.claims.jti, sub: verified.claims.sub, err: regenErr.message,
         });
-        return reject(res, 500, "server_error", "Session error");
+        return reject(req, res, 500, "server_error", "Session error", cfg);
       }
       req.session.userId = provisioned.userId;
       req.session.mfaPending = false;
@@ -388,7 +412,7 @@ export function registerSsoRoutes(
           logSsoOutcome(req, "reject", "server_error", {
             jti: verified.claims.jti, sub: verified.claims.sub, err: saveErr.message,
           });
-          return reject(res, 500, "server_error", "Session error");
+          return reject(req, res, 500, "server_error", "Session error", cfg);
         }
         logSsoOutcome(req, "accept", "ok", {
           jti: verified.claims.jti,

@@ -262,6 +262,49 @@ describe("/sso route", () => {
     const res = await request(app).get(`/sso?token=${makeToken()}`);
     expect(JSON.stringify(res.body)).not.toContain(SECRET);
   });
+
+  it("renders an HTML error page when the browser sends Accept: text/html", async () => {
+    const app = buildApp(cfg);
+    const now = Math.floor(Date.now() / 1000);
+    const tok = makeToken({ iat: now - 1000, exp: now - 500 });
+    const res = await request(app)
+      .get(`/sso?token=${tok}`)
+      .set("Accept", "text/html,application/xhtml+xml");
+    expect(res.status).toBe(401);
+    expect(res.headers["content-type"]).toMatch(/text\/html/);
+    expect(res.text).toContain("<!DOCTYPE html>");
+    expect(res.text).toContain("expired");
+    expect(res.text).toContain("Your sign-in link has expired");
+    expect(res.text).toContain(`href="${cfg.baseUrl}"`);
+  });
+
+  it("still returns JSON when Accept includes application/json", async () => {
+    const app = buildApp(cfg);
+    const res = await request(app)
+      .get("/sso")
+      .set("Accept", "application/json");
+    expect(res.status).toBe(400);
+    expect(res.headers["content-type"]).toMatch(/application\/json/);
+    expect(res.body.code).toBe("missing_token");
+  });
+
+  it("returns JSON when no Accept header is present (API client default)", async () => {
+    const app = buildApp(cfg);
+    const res = await request(app).get("/sso");
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("missing_token");
+  });
+
+  it("HTML error page omits the back link when SSO is not configured", async () => {
+    const app = buildApp(null);
+    const res = await request(app)
+      .get("/sso?token=anything")
+      .set("Accept", "text/html");
+    expect(res.status).toBe(503);
+    expect(res.text).toContain("OperatorOS sign-in isn");
+    expect(res.text).toContain("sso_not_configured");
+    expect(res.text).not.toContain("Return to OperatorOS");
+  });
 });
 
 describe("findOrCreateSsoUser concurrent provisioning", () => {
