@@ -133,9 +133,192 @@ const ES: Translation = {
   },
 };
 
+const FR: Translation = {
+  pageTitleSuffix: "Tech Deck",
+  errorCodeLabel: "Code d'erreur",
+  backLabel: "Retour à OperatorOS",
+  fallback: {
+    title: "Nous n'avons pas pu finaliser votre connexion",
+    body: "Veuillez retourner sur OperatorOS et relancer Tech Deck.",
+  },
+  codes: {
+    missing_token: {
+      title: "Le lien de connexion est incomplet",
+      body: "Ce lien de connexion ne contient pas les informations nécessaires. Veuillez retourner sur OperatorOS et relancer Tech Deck.",
+    },
+    bad_request: {
+      title: "Le lien de connexion est mal formé",
+      body: "Nous n'avons pas pu lire votre lien de connexion. Veuillez retourner sur OperatorOS et relancer Tech Deck.",
+    },
+    signature_invalid: {
+      title: "Le lien de connexion n'a pas pu être vérifié",
+      body: "Nous n'avons pas pu vérifier ce lien de connexion. Veuillez retourner sur OperatorOS et lancer une nouvelle connexion.",
+    },
+    issuer_mismatch: {
+      title: "Le lien de connexion provient d'une source inconnue",
+      body: "Ce lien de connexion n'a pas été émis par OperatorOS. Veuillez retourner sur OperatorOS et réessayer.",
+    },
+    audience_mismatch: {
+      title: "Le lien de connexion est destiné à une autre application",
+      body: "Ce lien de connexion n'a pas été émis pour Tech Deck. Veuillez retourner sur OperatorOS et lancer Tech Deck depuis cette interface.",
+    },
+    env_mismatch: {
+      title: "Le lien de connexion concerne un autre environnement",
+      body: "Ce lien de connexion a été émis pour un environnement différent. Veuillez retourner sur OperatorOS et réessayer.",
+    },
+    expired: {
+      title: "Votre lien de connexion a expiré",
+      body: "Les liens de connexion ne sont valides que pendant une courte durée. Veuillez retourner sur OperatorOS et lancer une nouvelle connexion.",
+    },
+    clock_skew: {
+      title: "Le lien de connexion n'est pas encore valide",
+      body: "L'horloge de votre appareil est peut-être désynchronisée. Vérifiez l'heure de votre appareil, puis retournez sur OperatorOS pour réessayer.",
+    },
+    consume_failed: {
+      title: "Le lien de connexion a déjà été utilisé",
+      body: "Chaque lien de connexion ne peut être utilisé qu'une seule fois. Veuillez retourner sur OperatorOS et lancer une nouvelle connexion.",
+    },
+    sso_consume_unavailable: {
+      title: "Nous ne parvenons pas à joindre OperatorOS pour le moment",
+      body: "Nous n'avons pas pu contacter OperatorOS pour finaliser votre connexion. Patientez un instant, puis retournez sur OperatorOS pour réessayer.",
+    },
+    sso_not_configured: {
+      title: "La connexion OperatorOS n'est pas configurée",
+      body: "L'authentification unique OperatorOS n'est pas configurée sur cette instance de Tech Deck. Veuillez contacter votre administrateur.",
+    },
+    server_error: {
+      title: "Une erreur s'est produite de notre côté",
+      body: "Une erreur inattendue est survenue lors de votre connexion. Veuillez retourner sur OperatorOS et réessayer.",
+    },
+  },
+};
+
+const DE: Translation = {
+  pageTitleSuffix: "Tech Deck",
+  errorCodeLabel: "Fehlercode",
+  backLabel: "Zurück zu OperatorOS",
+  fallback: {
+    title: "Anmeldung konnte nicht abgeschlossen werden",
+    body: "Bitte kehren Sie zu OperatorOS zurück und starten Sie Tech Deck erneut.",
+  },
+  codes: {
+    missing_token: {
+      title: "Der Anmeldelink ist unvollständig",
+      body: "Diesem Anmeldelink fehlen die erforderlichen Informationen. Bitte kehren Sie zu OperatorOS zurück und starten Sie Tech Deck erneut.",
+    },
+    bad_request: {
+      title: "Der Anmeldelink ist fehlerhaft",
+      body: "Ihr Anmeldelink konnte nicht gelesen werden. Bitte kehren Sie zu OperatorOS zurück und starten Sie Tech Deck erneut.",
+    },
+    signature_invalid: {
+      title: "Der Anmeldelink konnte nicht überprüft werden",
+      body: "Dieser Anmeldelink konnte nicht verifiziert werden. Bitte kehren Sie zu OperatorOS zurück und starten Sie eine neue Anmeldung.",
+    },
+    issuer_mismatch: {
+      title: "Der Anmeldelink stammt aus einer unbekannten Quelle",
+      body: "Dieser Anmeldelink wurde nicht von OperatorOS ausgestellt. Bitte kehren Sie zu OperatorOS zurück und versuchen Sie es erneut.",
+    },
+    audience_mismatch: {
+      title: "Der Anmeldelink ist für eine andere App",
+      body: "Dieser Anmeldelink wurde nicht für Tech Deck ausgestellt. Bitte kehren Sie zu OperatorOS zurück und starten Sie Tech Deck von dort aus.",
+    },
+    env_mismatch: {
+      title: "Der Anmeldelink ist für eine andere Umgebung",
+      body: "Dieser Anmeldelink wurde für eine andere Umgebung ausgestellt. Bitte kehren Sie zu OperatorOS zurück und versuchen Sie es erneut.",
+    },
+    expired: {
+      title: "Ihr Anmeldelink ist abgelaufen",
+      body: "Anmeldelinks sind nur kurze Zeit gültig. Bitte kehren Sie zu OperatorOS zurück und starten Sie eine neue Anmeldung.",
+    },
+    clock_skew: {
+      title: "Der Anmeldelink ist noch nicht gültig",
+      body: "Die Uhr Ihres Geräts ist möglicherweise nicht synchron. Bitte überprüfen Sie die Uhrzeit Ihres Geräts und kehren Sie dann zu OperatorOS zurück, um es erneut zu versuchen.",
+    },
+    consume_failed: {
+      title: "Der Anmeldelink wurde bereits verwendet",
+      body: "Jeder Anmeldelink kann nur einmal verwendet werden. Bitte kehren Sie zu OperatorOS zurück und starten Sie eine neue Anmeldung.",
+    },
+    sso_consume_unavailable: {
+      title: "OperatorOS ist derzeit nicht erreichbar",
+      body: "Wir konnten OperatorOS nicht erreichen, um Ihre Anmeldung abzuschließen. Bitte warten Sie einen Moment und kehren Sie dann zu OperatorOS zurück, um es erneut zu versuchen.",
+    },
+    sso_not_configured: {
+      title: "OperatorOS-Anmeldung ist nicht eingerichtet",
+      body: "Die OperatorOS-Single-Sign-On-Funktion ist auf dieser Tech Deck-Instanz nicht konfiguriert. Bitte wenden Sie sich an Ihren Administrator.",
+    },
+    server_error: {
+      title: "Auf unserer Seite ist etwas schiefgelaufen",
+      body: "Beim Abschluss Ihrer Anmeldung ist ein unerwarteter Fehler aufgetreten. Bitte kehren Sie zu OperatorOS zurück und versuchen Sie es erneut.",
+    },
+  },
+};
+
+const PT: Translation = {
+  pageTitleSuffix: "Tech Deck",
+  errorCodeLabel: "Código de erro",
+  backLabel: "Voltar para o OperatorOS",
+  fallback: {
+    title: "Não foi possível concluir o seu início de sessão",
+    body: "Volte ao OperatorOS e tente abrir o Tech Deck novamente.",
+  },
+  codes: {
+    missing_token: {
+      title: "O link de início de sessão está incompleto",
+      body: "Este link de início de sessão não inclui as informações necessárias. Volte ao OperatorOS e tente abrir o Tech Deck novamente.",
+    },
+    bad_request: {
+      title: "O link de início de sessão está malformado",
+      body: "Não foi possível ler o seu link de início de sessão. Volte ao OperatorOS e tente abrir o Tech Deck novamente.",
+    },
+    signature_invalid: {
+      title: "Não foi possível verificar o link de início de sessão",
+      body: "Não conseguimos verificar este link de início de sessão. Volte ao OperatorOS e inicie uma nova sessão.",
+    },
+    issuer_mismatch: {
+      title: "O link de início de sessão vem de uma origem desconhecida",
+      body: "Este link de início de sessão não foi emitido pelo OperatorOS. Volte ao OperatorOS e tente novamente.",
+    },
+    audience_mismatch: {
+      title: "O link de início de sessão é para outra aplicação",
+      body: "Este link de início de sessão não foi emitido para o Tech Deck. Volte ao OperatorOS e abra o Tech Deck a partir de lá.",
+    },
+    env_mismatch: {
+      title: "O link de início de sessão é para outro ambiente",
+      body: "Este link de início de sessão foi emitido para um ambiente diferente. Volte ao OperatorOS e tente novamente.",
+    },
+    expired: {
+      title: "O seu link de início de sessão expirou",
+      body: "Os links de início de sessão só são válidos por um curto período. Volte ao OperatorOS e inicie uma nova sessão.",
+    },
+    clock_skew: {
+      title: "O link de início de sessão ainda não é válido",
+      body: "O relógio do seu computador pode estar dessincronizado. Verifique a hora no seu dispositivo e volte ao OperatorOS para tentar novamente.",
+    },
+    consume_failed: {
+      title: "O link de início de sessão já foi utilizado",
+      body: "Cada link de início de sessão só pode ser utilizado uma vez. Volte ao OperatorOS e inicie uma nova sessão.",
+    },
+    sso_consume_unavailable: {
+      title: "Não conseguimos contactar o OperatorOS neste momento",
+      body: "Não conseguimos contactar o OperatorOS para concluir o seu início de sessão. Aguarde um momento e volte ao OperatorOS para tentar novamente.",
+    },
+    sso_not_configured: {
+      title: "O início de sessão do OperatorOS não está configurado",
+      body: "O início de sessão único do OperatorOS não está configurado nesta instância do Tech Deck. Contacte o seu administrador.",
+    },
+    server_error: {
+      title: "Algo correu mal do nosso lado",
+      body: "Ocorreu um erro inesperado ao concluir o seu início de sessão. Volte ao OperatorOS e tente novamente.",
+    },
+  },
+};
+
 const TRANSLATIONS: Record<string, Translation> = {
   en: EN,
   es: ES,
+  fr: FR,
+  de: DE,
+  pt: PT,
 };
 
 const DEFAULT_LANG = "en";
