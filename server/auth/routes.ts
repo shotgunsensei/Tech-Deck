@@ -17,6 +17,7 @@ import {
 import { isAuthenticated } from "./middleware";
 import { enforceHttps } from "./httpsEnforce";
 import { csrfProtection, registerCsrfRoutes } from "./csrf";
+import { sendAuthError } from "./errorPage";
 
 const registerSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -39,9 +40,11 @@ const loginSchema = z.object({
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
-  message: { message: "Too many attempts. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
+  handler: (req: Request, res: Response) => {
+    sendAuthError(req, res, 429, "rate_limited", "Too many attempts. Please try again later.");
+  },
 });
 
 export function registerAuthRoutes(app: Express): void {
@@ -53,9 +56,13 @@ export function registerAuthRoutes(app: Express): void {
     try {
       const parsed = registerSchema.safeParse(req.body);
       if (!parsed.success) {
-        return res.status(400).json({
-          message: parsed.error.issues[0]?.message || "Invalid input",
-        });
+        return sendAuthError(
+          req,
+          res,
+          400,
+          "invalid_input",
+          parsed.error.issues[0]?.message || "Invalid input",
+        );
       }
 
       const result = await registerUser(parsed.data);
@@ -63,13 +70,13 @@ export function registerAuthRoutes(app: Express): void {
       req.session.regenerate((err) => {
         if (err) {
           console.error("[auth] Session regeneration error:", err);
-          return res.status(500).json({ message: "Registration failed" });
+          return sendAuthError(req, res, 500, "registration_failed", "Registration failed");
         }
         req.session.userId = result.id;
         req.session.save((saveErr) => {
           if (saveErr) {
             console.error("[auth] Session save error:", saveErr);
-            return res.status(500).json({ message: "Registration failed" });
+            return sendAuthError(req, res, 500, "registration_failed", "Registration failed");
           }
           res.status(201).json({ success: true, userId: result.id });
         });
@@ -77,10 +84,10 @@ export function registerAuthRoutes(app: Express): void {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Registration failed";
       if (message.includes("already exists")) {
-        return res.status(409).json({ message });
+        return sendAuthError(req, res, 409, "email_exists", message);
       }
       console.error("[auth] Registration error:", error);
-      res.status(500).json({ message: "Registration failed" });
+      sendAuthError(req, res, 500, "registration_failed", "Registration failed");
     }
   });
 
@@ -88,7 +95,7 @@ export function registerAuthRoutes(app: Express): void {
     try {
       const parsed = loginSchema.safeParse(req.body);
       if (!parsed.success) {
-        return res.status(400).json({ message: "Invalid input" });
+        return sendAuthError(req, res, 400, "invalid_input", "Invalid input");
       }
 
       const { user, requiresMfa } = await authenticateUser(
@@ -99,7 +106,7 @@ export function registerAuthRoutes(app: Express): void {
       req.session.regenerate((err) => {
         if (err) {
           console.error("[auth] Session regeneration error:", err);
-          return res.status(500).json({ message: "Login failed" });
+          return sendAuthError(req, res, 500, "server_error", "Login failed");
         }
 
         req.session.userId = user.id;
@@ -114,10 +121,10 @@ export function registerAuthRoutes(app: Express): void {
       });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Invalid credentials";
-      if (message.includes("locked")) {
-        return res.status(423).json({ message });
+      if (message.toLowerCase().includes("locked")) {
+        return sendAuthError(req, res, 423, "account_locked", message);
       }
-      res.status(401).json({ message });
+      sendAuthError(req, res, 401, "invalid_credentials", message);
     }
   });
 
@@ -125,17 +132,17 @@ export function registerAuthRoutes(app: Express): void {
     try {
       const userId = req.session?.userId;
       if (!userId || !req.session?.mfaPending) {
-        return res.status(401).json({ message: "No pending MFA session" });
+        return sendAuthError(req, res, 401, "mfa_session_missing", "No pending MFA session");
       }
 
       const { code } = req.body;
       if (!code || typeof code !== "string") {
-        return res.status(400).json({ message: "MFA code is required" });
+        return sendAuthError(req, res, 400, "mfa_code_required", "MFA code is required");
       }
 
       const user = await getUser(userId);
       if (!user || !user.mfaSecret) {
-        return res.status(401).json({ message: "Invalid session" });
+        return sendAuthError(req, res, 401, "mfa_session_missing", "Invalid session");
       }
 
       const isValid = verifyTOTPToken(code, user.mfaSecret);
@@ -143,7 +150,7 @@ export function registerAuthRoutes(app: Express): void {
       if (!isValid) {
         const recoveryUsed = await useRecoveryCode(userId, code);
         if (!recoveryUsed) {
-          return res.status(401).json({ message: "Invalid MFA code" });
+          return sendAuthError(req, res, 401, "mfa_code_invalid", "Invalid MFA code");
         }
       }
 
@@ -151,7 +158,7 @@ export function registerAuthRoutes(app: Express): void {
       req.session.save(() => res.json({ success: true }));
     } catch (error) {
       console.error("[auth] MFA validation error:", error);
-      res.status(500).json({ message: "MFA validation failed" });
+      sendAuthError(req, res, 500, "server_error", "MFA validation failed");
     }
   });
 
@@ -159,7 +166,7 @@ export function registerAuthRoutes(app: Express): void {
     req.session.destroy((err) => {
       if (err) {
         console.error("[auth] Logout error:", err);
-        return res.status(500).json({ message: "Logout failed" });
+        return sendAuthError(req, res, 500, "logout_failed", "Logout failed");
       }
       res.clearCookie("connect.sid");
       res.json({ success: true });
@@ -171,7 +178,7 @@ export function registerAuthRoutes(app: Express): void {
       const userId = req.session.userId;
       const user = await getUser(userId!);
       if (!user) {
-        return res.status(404).json({ message: "User not found" });
+        return sendAuthError(req, res, 404, "user_not_found", "User not found");
       }
       res.json({
         id: user.id,
@@ -185,7 +192,7 @@ export function registerAuthRoutes(app: Express): void {
       });
     } catch (error) {
       console.error("[auth] Fetch user error:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
+      sendAuthError(req, res, 500, "server_error", "Failed to fetch user");
     }
   });
 
@@ -194,11 +201,11 @@ export function registerAuthRoutes(app: Express): void {
       const userId = req.session.userId!;
       const user = await getUser(userId);
       if (!user) {
-        return res.status(404).json({ message: "User not found" });
+        return sendAuthError(req, res, 404, "user_not_found", "User not found");
       }
 
       if (user.mfaEnabled) {
-        return res.status(400).json({ message: "MFA is already enabled" });
+        return sendAuthError(req, res, 400, "invalid_input", "MFA is already enabled");
       }
 
       const { secret, otpauthUrl } = generateTOTPSecret(user.email || "user");
@@ -214,7 +221,7 @@ export function registerAuthRoutes(app: Express): void {
       });
     } catch (error) {
       console.error("[auth] MFA setup error:", error);
-      res.status(500).json({ message: "MFA setup failed" });
+      sendAuthError(req, res, 500, "server_error", "MFA setup failed");
     }
   });
 
@@ -224,17 +231,17 @@ export function registerAuthRoutes(app: Express): void {
       const pendingSecret = req.session.pendingMfaSecret;
 
       if (!pendingSecret) {
-        return res.status(400).json({ message: "No MFA setup in progress. Start setup first." });
+        return sendAuthError(req, res, 400, "mfa_setup_missing", "No MFA setup in progress. Start setup first.");
       }
 
       const { code } = req.body;
       if (!code || typeof code !== "string") {
-        return res.status(400).json({ message: "Verification code is required" });
+        return sendAuthError(req, res, 400, "mfa_code_required", "Verification code is required");
       }
 
       const isValid = verifyTOTPToken(code, pendingSecret);
       if (!isValid) {
-        return res.status(400).json({ message: "Invalid verification code. Please try again." });
+        return sendAuthError(req, res, 400, "mfa_code_invalid", "Invalid verification code. Please try again.");
       }
 
       const recoveryCodes = generateRecoveryCodes();
@@ -250,7 +257,7 @@ export function registerAuthRoutes(app: Express): void {
       });
     } catch (error) {
       console.error("[auth] MFA verify error:", error);
-      res.status(500).json({ message: "MFA verification failed" });
+      sendAuthError(req, res, 500, "server_error", "MFA verification failed");
     }
   });
 
@@ -260,24 +267,24 @@ export function registerAuthRoutes(app: Express): void {
       const { password } = req.body;
 
       if (!password) {
-        return res.status(400).json({ message: "Password is required to disable MFA" });
+        return sendAuthError(req, res, 400, "password_required", "Password is required to disable MFA");
       }
 
       const user = await getUser(userId);
       if (!user || !user.passwordHash) {
-        return res.status(400).json({ message: "Invalid request" });
+        return sendAuthError(req, res, 400, "invalid_input", "Invalid request");
       }
 
       const valid = await verifyPassword(password, user.passwordHash);
       if (!valid) {
-        return res.status(401).json({ message: "Invalid password" });
+        return sendAuthError(req, res, 401, "password_invalid", "Invalid password");
       }
 
       await disableMfa(userId);
       res.json({ success: true });
     } catch (error) {
       console.error("[auth] MFA disable error:", error);
-      res.status(500).json({ message: "Failed to disable MFA" });
+      sendAuthError(req, res, 500, "mfa_disable_failed", "Failed to disable MFA");
     }
   });
 
@@ -287,21 +294,21 @@ export function registerAuthRoutes(app: Express): void {
       const { currentPassword, newPassword } = req.body;
 
       if (!currentPassword || !newPassword) {
-        return res.status(400).json({ message: "Current and new password are required" });
+        return sendAuthError(req, res, 400, "password_required", "Current and new password are required");
       }
 
       if (newPassword.length < 8) {
-        return res.status(400).json({ message: "New password must be at least 8 characters" });
+        return sendAuthError(req, res, 400, "password_too_short", "New password must be at least 8 characters");
       }
 
       const user = await getUser(userId);
       if (!user || !user.passwordHash) {
-        return res.status(400).json({ message: "Invalid request" });
+        return sendAuthError(req, res, 400, "invalid_input", "Invalid request");
       }
 
       const valid = await verifyPassword(currentPassword, user.passwordHash);
       if (!valid) {
-        return res.status(401).json({ message: "Current password is incorrect" });
+        return sendAuthError(req, res, 401, "password_invalid", "Current password is incorrect");
       }
 
       const { hashPassword } = await import("./authService");
@@ -314,7 +321,7 @@ export function registerAuthRoutes(app: Express): void {
       res.json({ success: true });
     } catch (error) {
       console.error("[auth] Password change error:", error);
-      res.status(500).json({ message: "Failed to change password" });
+      sendAuthError(req, res, 500, "password_change_failed", "Failed to change password");
     }
   });
 

@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction, RequestHandler } from "express";
 import { getUser } from "./authService";
+import { sendAuthError } from "./errorPage";
 
 declare global {
   namespace Express {
@@ -32,18 +33,18 @@ export const hydrateUser: RequestHandler = async (req: Request, res: Response, n
 
 export const isAuthenticated: RequestHandler = async (req: Request, res: Response, next: NextFunction) => {
   if (!req.session?.userId) {
-    return res.status(401).json({ message: "Unauthorized" });
+    return sendAuthError(req, res, 401, "not_authenticated", "Unauthorized");
   }
 
   if (req.session.mfaPending) {
-    return res.status(401).json({ message: "MFA verification required" });
+    return sendAuthError(req, res, 401, "mfa_session_missing", "MFA verification required");
   }
 
   if (!req.user) {
     const user = await getUser(req.session.userId);
     if (!user) {
       req.session.destroy(() => {});
-      return res.status(401).json({ message: "Unauthorized" });
+      return sendAuthError(req, res, 401, "not_authenticated", "Unauthorized");
     }
     req.user = { claims: { sub: user.id }, profile: user as unknown as Record<string, unknown> };
   }

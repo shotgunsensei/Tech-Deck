@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import type { Request, Response, NextFunction, RequestHandler } from "express";
+import { sendAuthError } from "./errorPage";
 
 declare module "express-session" {
   interface SessionData {
@@ -29,7 +30,7 @@ export const csrfProtection: RequestHandler = (req: Request, res: Response, next
   const sessionToken = req.session?.csrfToken;
 
   if (!sessionToken || !submittedToken || submittedToken !== sessionToken) {
-    return res.status(403).json({ message: "Invalid CSRF token" });
+    return sendAuthError(req, res, 403, "csrf_invalid", "Invalid CSRF token");
   }
 
   next();
