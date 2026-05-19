@@ -32,6 +32,13 @@ function getSnapshotFromReq(req: any): EntitlementSnapshot | null {
  * `tenant_subscriptions` + plan defaults to decide blocking + features
  * so feature gating doesn't fail open. Logged once per request.
  */
+const _legacyWarnedTenants = new Set<string>();
+function warnLegacyOnce(tenantId: string, extra: Record<string, unknown>) {
+  if (_legacyWarnedTenants.has(tenantId)) return;
+  _legacyWarnedTenants.add(tenantId);
+  logger.warn({ tenantId, ...extra }, "[enforcePlan] using legacy fallback (snapshot not yet hydrated)");
+}
+
 async function getLegacyEntitlementForTenant(
   tenantId: string,
 ): Promise<{ blocked: boolean; features: string[]; limits: Record<string, number>; accessLevel: string } | null> {
@@ -120,14 +127,14 @@ export function requireFeature(feature: "api" | "portal" | "status" | "webhooks"
       if (!tenantId) return next();
       const legacy = await getLegacyEntitlementForTenant(tenantId);
       if (!legacy) {
-        logger.warn({ tenantId, feature }, "[enforcePlan] no snapshot or legacy sub; denying feature");
+        warnLegacyOnce(tenantId, { feature, found: false });
         return res.status(402).json({
           error: "plan_required",
           feature,
           message: "Your OperatorOS entitlements are not yet synced. Sign in again to refresh.",
         });
       }
-      logger.warn({ tenantId, feature, accessLevel: legacy.accessLevel }, "[enforcePlan] using legacy fallback");
+      warnLegacyOnce(tenantId, { feature, accessLevel: legacy.accessLevel });
       if (legacy.blocked) {
         return res.status(402).json({
           error: "subscription_inactive",
@@ -164,7 +171,7 @@ export function checkLimit(limitType: "usersMax" | "webhooksMax" | "reportsPerMo
       } else {
         const legacy = await getLegacyEntitlementForTenant(tenantId);
         if (!legacy) return next();
-        logger.warn({ tenantId, limitType }, "[enforcePlan] checkLimit using legacy fallback");
+        warnLegacyOnce(tenantId, { limitType });
         maxValue = legacy.limits[limitType];
         accessLevel = legacy.accessLevel;
       }

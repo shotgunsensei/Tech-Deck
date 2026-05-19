@@ -117,8 +117,12 @@ export function mapOperatorOsRole(
   const mr = (moduleRole || "").toLowerCase();
   const tr = (tenantRole || "").toLowerCase();
   if (mr === "none") return null;
-  if (tr === "owner" || mr === "owner") return "OWNER";
-  if (tr === "tenant_admin" || mr === "module_admin" || mr === "admin") return "ADMIN";
+  // Per spec: tenant_role=owner is treated as ADMIN locally (not OWNER).
+  // Local OWNER is reserved for the legacy email/password account that
+  // originally created the workspace; OperatorOS-provisioned identities
+  // never claim it. Only an explicit module_role=owner escalates to OWNER.
+  if (mr === "owner") return "OWNER";
+  if (tr === "owner" || tr === "tenant_admin" || mr === "module_admin" || mr === "admin") return "ADMIN";
   if (mr === "viewer") return "CLIENT";
   if (mr === "module_user" || mr === "tech" || mr === "technician" || mr === "member") return "TECH";
   // No recognised positive role and no tenant role → deny. Previously this
