@@ -241,7 +241,12 @@ export function verifyToken(token: string, cfg: SsoConfig): VerifyResult {
   // and `module_role` together decide whether the user may enter.
   if (typeof claims.target_module_key === "string") {
     if (claims.target_module_key.toLowerCase() !== cfg.moduleKey) {
-      return { ok: false, status: 401, code: "audience_mismatch", message: "Target module key mismatch" };
+      return {
+        ok: false,
+        status: 401,
+        code: "module_access_denied",
+        message: "Token targets a different module",
+      };
     }
   }
   const moduleEnabledClaim = claims.target_module_enabled;

@@ -1,7 +1,12 @@
 import type { Response, NextFunction } from "express";
 import { storage } from "../../storage";
 import { logger } from "../../logger";
-import { parseSnapshot, isBlockingStatus, type EntitlementSnapshot } from "../../auth/entitlements";
+import {
+  parseSnapshot,
+  isBlockingStatus,
+  defaultFeaturesFor,
+  type EntitlementSnapshot,
+} from "../../auth/entitlements";
 
 /**
  * OperatorOS is the authority for plans/entitlements (Task #12).
@@ -19,6 +24,29 @@ function getSnapshotFromReq(req: any): EntitlementSnapshot | null {
   const profile = req.user?.profile as Record<string, unknown> | undefined;
   if (!profile) return null;
   return parseSnapshot(profile.entitlementSnapshotJson);
+}
+
+/**
+ * Legacy fallback for users whose snapshot hasn't been hydrated yet
+ * (pre-Task-#12 row, or OperatorOS sync hasn't fired). Reads
+ * `tenant_subscriptions` + plan defaults to decide blocking + features
+ * so feature gating doesn't fail open. Logged once per request.
+ */
+async function getLegacyEntitlementForTenant(
+  tenantId: string,
+): Promise<{ blocked: boolean; features: string[]; limits: Record<string, number>; accessLevel: string } | null> {
+  try {
+    const sub = await storage.getTenantSubscription(tenantId);
+    if (!sub) return null;
+    const status = (sub.status || "").toLowerCase();
+    const blocked = ["past_due", "unpaid", "canceled"].includes(status);
+    const accessLevel = (sub.planCode || "basic").toLowerCase();
+    const features = defaultFeaturesFor(accessLevel);
+    const limits = (await import("../../auth/entitlements")).defaultLimitsFor(accessLevel) as Record<string, number>;
+    return { blocked, features, limits, accessLevel };
+  } catch {
+    return null;
+  }
 }
 
 import { defaultLimitsFor, type EntitlementLimits } from "../../auth/entitlements";
@@ -68,28 +96,52 @@ export function requireFeature(feature: "api" | "portal" | "status" | "webhooks"
     const next = _next;
     try {
       const snapshot = getSnapshotFromReq(req);
-      // No snapshot → user is from a pre-Task-#12 row that hasn't re-SSO'd
-      // yet, OR this route runs before auth. Allow through; downstream auth
-      // either blocks or the user will get a fresh snapshot on next login.
-      if (!snapshot) return next();
-
-      if (isBlockingStatus(snapshot.subscriptionStatus) || !snapshot.enabled) {
-        return res.status(402).json({
-          error: "subscription_inactive",
-          status: snapshot.subscriptionStatus,
-          message: "Your OperatorOS subscription is not active. Manage billing in OperatorOS.",
-        });
+      if (snapshot) {
+        if (isBlockingStatus(snapshot.subscriptionStatus) || !snapshot.enabled) {
+          return res.status(402).json({
+            error: "subscription_inactive",
+            status: snapshot.subscriptionStatus,
+            message: "Your OperatorOS subscription is not active. Manage billing in OperatorOS.",
+          });
+        }
+        if (!snapshot.features.includes(feature)) {
+          return res.status(402).json({
+            error: "plan_required",
+            feature,
+            accessLevel: snapshot.accessLevel,
+            message: `The ${feature} feature is not included in your current OperatorOS plan.`,
+          });
+        }
+        return next();
       }
 
-      if (!snapshot.features.includes(feature)) {
+      // No snapshot → legacy fallback so feature gating cannot fail open.
+      const tenantId = req.tenantCtx?.tenantId;
+      if (!tenantId) return next();
+      const legacy = await getLegacyEntitlementForTenant(tenantId);
+      if (!legacy) {
+        logger.warn({ tenantId, feature }, "[enforcePlan] no snapshot or legacy sub; denying feature");
         return res.status(402).json({
           error: "plan_required",
           feature,
-          accessLevel: snapshot.accessLevel,
-          message: `The ${feature} feature is not included in your current OperatorOS plan.`,
+          message: "Your OperatorOS entitlements are not yet synced. Sign in again to refresh.",
         });
       }
-
+      logger.warn({ tenantId, feature, accessLevel: legacy.accessLevel }, "[enforcePlan] using legacy fallback");
+      if (legacy.blocked) {
+        return res.status(402).json({
+          error: "subscription_inactive",
+          message: "Your subscription is not active. Manage billing in OperatorOS.",
+        });
+      }
+      if (!legacy.features.includes(feature)) {
+        return res.status(402).json({
+          error: "plan_required",
+          feature,
+          accessLevel: legacy.accessLevel,
+          message: `The ${feature} feature is not included in your current plan.`,
+        });
+      }
       return next();
     } catch (err) {
       logger.error({ err: err instanceof Error ? err.message : String(err) }, "[enforcePlan] requireFeature error");
@@ -103,9 +155,19 @@ export function checkLimit(limitType: "usersMax" | "webhooksMax" | "reportsPerMo
     try {
       const snapshot = getSnapshotFromReq(req);
       const tenantId = req.tenantCtx?.tenantId;
-      if (!snapshot || !tenantId) return next();
+      if (!tenantId) return next();
 
-      const maxValue = snapshot.limits[limitType] as number | undefined;
+      let maxValue: number | undefined;
+      let accessLevel = snapshot?.accessLevel;
+      if (snapshot) {
+        maxValue = snapshot.limits[limitType] as number | undefined;
+      } else {
+        const legacy = await getLegacyEntitlementForTenant(tenantId);
+        if (!legacy) return next();
+        logger.warn({ tenantId, limitType }, "[enforcePlan] checkLimit using legacy fallback");
+        maxValue = legacy.limits[limitType];
+        accessLevel = legacy.accessLevel;
+      }
       if (!maxValue || maxValue <= 0) return next();
 
       let currentValue = 0;
@@ -143,7 +205,7 @@ export function checkLimit(limitType: "usersMax" | "webhooksMax" | "reportsPerMo
           limit: limitType,
           current: currentValue,
           max: maxValue,
-          accessLevel: snapshot.accessLevel,
+          accessLevel,
           message: `You have reached the ${limitType} limit for your OperatorOS plan.`,
         });
       }

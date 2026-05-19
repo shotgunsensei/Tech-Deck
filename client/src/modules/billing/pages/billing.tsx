@@ -39,8 +39,9 @@ interface SubscriptionResponse {
   } | null;
 }
 
+import type { LucideIcon } from "lucide-react";
 function UsageBar({ label, icon: Icon, current, max, unit = "" }: {
-  label: string; icon: any; current: number; max: number; unit?: string;
+  label: string; icon: LucideIcon; current: number; max: number; unit?: string;
 }) {
   const pct = max > 0 ? Math.min(100, (current / max) * 100) : 0;
   const isWarn = pct >= 80;

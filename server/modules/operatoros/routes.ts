@@ -3,7 +3,7 @@ import { z } from "zod";
 import { timingSafeEqual } from "node:crypto";
 import { db } from "../../db";
 import { users, tenantMembers, tenants } from "@shared/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { logger } from "../../logger";
 import { emitEvent } from "../../core/events/helpers";
@@ -188,14 +188,29 @@ export function registerOperatorOsRoutes(app: Express) {
         });
       }
 
+      // Session invalidation on revoke — drop any active sessions for this
+      // user so the next request lands on /sso or login. Sessions are stored
+      // in the `sessions` table with the connect-pg-simple JSONB `sess`
+      // column containing `passport.user = <userId>`.
+      let sessionsKilled = 0;
+      if (!enabled || !localRole) {
+        try {
+          const killed = await db.execute(sql`DELETE FROM sessions WHERE sess->'passport'->>'user' = ${result.userId}`);
+          sessionsKilled = (killed as any).rowCount ?? 0;
+        } catch (err) {
+          logger.warn({ err: err instanceof Error ? err.message : String(err) }, "[entitlement-sync] session kill failed");
+        }
+      }
+
       logger.info({
         userId: result.userId,
         operatorosUserId: body.operatoros_user_id,
         enabled,
         role: localRole,
+        sessionsKilled,
       }, "[entitlement-sync] applied");
 
-      return res.status(200).json({ code: "ok", userId: result.userId, snapshot });
+      return res.status(200).json({ code: "ok", userId: result.userId, snapshot, sessionsKilled });
     } catch (err) {
       logger.error({ err: err instanceof Error ? err.message : String(err) }, "[entitlement-sync] failed");
       return res.status(500).json({ code: "server_error", message: "Failed to apply entitlement sync" });
