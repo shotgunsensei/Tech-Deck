@@ -1,6 +1,14 @@
 import type { Response, NextFunction } from "express";
 import { parseSnapshot, isBlockingStatus, type EntitlementSnapshot } from "../../auth/entitlements";
+import { storage } from "../../storage";
 import { logger } from "../../logger";
+
+const _legacyWarnedTenants = new Set<string>();
+function warnLegacyOnce(tenantId: string) {
+  if (_legacyWarnedTenants.has(tenantId)) return;
+  _legacyWarnedTenants.add(tenantId);
+  logger.warn({ tenantId }, "[requireNotPaused] using legacy fallback (snapshot not yet hydrated)");
+}
 
 /**
  * Task #12: OperatorOS is the source of truth for subscription status.
@@ -26,7 +34,27 @@ export function requireNotPaused() {
   return async (req: any, res: Response, next: NextFunction) => {
     try {
       const snapshot = getSnapshotFromReq(req);
-      if (!snapshot) return next();
+      if (!snapshot) {
+        // Legacy fallback so we don't fail open for pre-Task-#12 users.
+        const tenantId = req.tenantCtx?.tenantId;
+        if (!tenantId) return next();
+        try {
+          const sub = await storage.getTenantSubscription(tenantId);
+          if (!sub) return next();
+          warnLegacyOnce(tenantId);
+          const status = (sub.status || "").toLowerCase();
+          if (["past_due", "unpaid", "canceled"].includes(status) || (sub as any).pausedAt) {
+            return res.status(402).json({
+              error: "subscription_inactive",
+              status,
+              message: "Your subscription is not active. Manage billing in OperatorOS.",
+            });
+          }
+          return next();
+        } catch {
+          return next();
+        }
+      }
       if (snapshot.enabled === false) {
         return res.status(402).json({
           error: "module_access_denied",

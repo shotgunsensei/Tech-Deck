@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   buildSnapshot,
   parseSnapshot,
@@ -109,6 +109,33 @@ describe("entitlements / isBlockingStatus", () => {
       expect(isBlockingStatus(s as any)).toBe(false);
     },
   );
+});
+
+describe("entitlements / requireNotPaused legacy fallback", () => {
+  it("blocks when no snapshot but legacy subscription status is past_due", async () => {
+    const { storage } = await import("../server/storage");
+    const spy = vi.spyOn(storage, "getTenantSubscription" as any)
+      .mockResolvedValue({ status: "past_due", pausedAt: null } as any);
+    const { requireNotPaused } = await import("../server/core/middleware/requireNotPaused");
+    const mw = requireNotPaused();
+    const calls: any[] = [];
+    const res: any = { status: (s: number) => ({ json: (b: any) => { calls.push({ s, b }); return res; } }) };
+    await mw({ user: { profile: {} }, tenantCtx: { tenantId: "t-legacy-1" } }, res, () => calls.push({ next: true }));
+    expect(calls[0].s).toBe(402);
+    expect(calls[0].b.error).toBe("subscription_inactive");
+    spy.mockRestore();
+  });
+
+  it("allows through when no snapshot and no legacy sub row", async () => {
+    const { storage } = await import("../server/storage");
+    const spy = vi.spyOn(storage, "getTenantSubscription" as any).mockResolvedValue(null);
+    const { requireNotPaused } = await import("../server/core/middleware/requireNotPaused");
+    const mw = requireNotPaused();
+    let nextCalled = false;
+    await mw({ user: { profile: {} }, tenantCtx: { tenantId: "t-legacy-2" } }, {} as any, () => { nextCalled = true; });
+    expect(nextCalled).toBe(true);
+    spy.mockRestore();
+  });
 });
 
 describe("entitlements / sync endpoint contract", () => {
