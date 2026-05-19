@@ -44,7 +44,7 @@ interface SubscriptionResponse {
 import type { LucideIcon } from "lucide-react";
 
 function buildOperatorOsBillingUrl(base: string | undefined): string {
-  const root = base || "https://operatoros.com/billing";
+  const root = base || "https://operatoros.app/billing";
   const sep = root.includes("?") ? "&" : "?";
   return `${root}${sep}return_to=techdeck`;
 }

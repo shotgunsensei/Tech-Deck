@@ -6,7 +6,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 
 const OPERATOROS_URL =
   (import.meta.env.VITE_OPERATOROS_BILLING_URL as string | undefined) ||
-  "https://operatoros.com/billing";
+  "https://operatoros.app/pricing";
 
 export default function PricingPage() {
   return (
