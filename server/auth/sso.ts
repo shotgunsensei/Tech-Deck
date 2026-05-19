@@ -239,22 +239,22 @@ export function verifyToken(token: string, cfg: SsoConfig): VerifyResult {
   // new authoritative claim; we accept tokens without it for rollout-compat
   // but require it to match this app when present. `target_module_enabled`
   // and `module_role` together decide whether the user may enter.
-  if (typeof claims.target_module_key === "string") {
-    if (claims.target_module_key.toLowerCase() !== cfg.moduleKey) {
-      return {
-        ok: false,
-        status: 401,
-        code: "module_access_denied",
-        message: "Token targets a different module",
-      };
-    }
+  // Task #12: target_module_key and target_module_enabled are AUTHORITATIVE
+  // and REQUIRED. A token lacking either claim cannot grant module access.
+  if (typeof claims.target_module_key !== "string"
+      || claims.target_module_key.toLowerCase() !== cfg.moduleKey) {
+    return {
+      ok: false,
+      status: 401,
+      code: "module_access_denied",
+      message: "Token does not grant access to this module",
+    };
   }
   const moduleEnabledClaim = claims.target_module_enabled;
   const moduleRoleClaim = (claims.module_role || "").toLowerCase();
-  // Reject when the claim is explicitly false, OR when module_role is "none".
-  // Absence of the claim is permitted (legacy rollout) — only an explicit
-  // negative answer denies.
-  if (moduleEnabledClaim === false || moduleRoleClaim === "none") {
+  // Require explicit enabled=true. Anything else (false, undefined, non-bool)
+  // is denial. module_role=none also denies.
+  if (moduleEnabledClaim !== true || moduleRoleClaim === "none") {
     return {
       ok: false,
       status: 401,

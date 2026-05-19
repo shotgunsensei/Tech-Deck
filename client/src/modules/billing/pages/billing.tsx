@@ -40,6 +40,12 @@ interface SubscriptionResponse {
 }
 
 import type { LucideIcon } from "lucide-react";
+
+function buildOperatorOsBillingUrl(base: string | undefined): string {
+  const root = base || "https://operatoros.com/billing";
+  const sep = root.includes("?") ? "&" : "?";
+  return `${root}${sep}return_to=techdeck`;
+}
 function UsageBar({ label, icon: Icon, current, max, unit = "" }: {
   label: string; icon: LucideIcon; current: number; max: number; unit?: string;
 }) {
@@ -97,7 +103,8 @@ export default function BillingPage() {
 
   const snap = data?.snapshot;
   const usage = subData?.usage;
-  const operatorosUrl = data?.operatorosBillingUrl || "https://operatoros.app/billing";
+  const operatorosUrl = buildOperatorOsBillingUrl(data?.operatorosBillingUrl);
+  const roleLabel = snap?.moduleRole || snap?.tenantRole || "—";
   const status = STATUS_BADGE[snap?.subscriptionStatus || "none"] || STATUS_BADGE.none;
 
   return (
@@ -115,6 +122,7 @@ export default function BillingPage() {
             <CardTitle className="text-lg flex items-center gap-2">
               Current Plan: <span data-testid="text-plan-name">{snap?.accessLevel || "—"}</span>
               <Badge variant={status.variant} data-testid="badge-plan-status">{status.label}</Badge>
+              <Badge variant="outline" data-testid="badge-role">Role: {roleLabel}</Badge>
             </CardTitle>
             {data?.lastSyncAt && (
               <span className="text-xs text-muted-foreground" data-testid="text-last-sync">

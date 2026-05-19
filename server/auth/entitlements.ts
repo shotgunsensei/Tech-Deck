@@ -121,6 +121,9 @@ export function mapOperatorOsRole(
   if (tr === "tenant_admin" || mr === "module_admin" || mr === "admin") return "ADMIN";
   if (mr === "viewer") return "CLIENT";
   if (mr === "module_user" || mr === "tech" || mr === "technician" || mr === "member") return "TECH";
+  // No recognised positive role and no tenant role → deny. Previously this
+  // returned TECH which let unclaimed tokens slip through.
+  if (!mr && !tr) return null;
   return "TECH";
 }
 

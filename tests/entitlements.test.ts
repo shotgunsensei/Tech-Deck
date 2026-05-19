@@ -88,12 +88,13 @@ describe("entitlements / mapOperatorOsRole", () => {
     expect(mapOperatorOsRole("member", undefined)).toBe("TECH");
   });
 
-  it("unknown roles default to TECH", () => {
+  it("unknown but non-empty role defaults to TECH (safe positive)", () => {
     expect(mapOperatorOsRole("mystery", undefined)).toBe("TECH");
   });
 
-  it("empty inputs default to TECH (not deny)", () => {
-    expect(mapOperatorOsRole(undefined, undefined)).toBe("TECH");
+  it("empty inputs DENY (no implicit grant)", () => {
+    expect(mapOperatorOsRole(undefined, undefined)).toBeNull();
+    expect(mapOperatorOsRole("", "")).toBeNull();
   });
 });
 
