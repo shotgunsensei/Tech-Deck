@@ -121,13 +121,14 @@ export function registerOperatorOsRoutes(app: Express) {
 
     try {
       const result = await db.transaction(async (tx) => {
-        // Look up by operatoros_user_id (preferred). Fall back to email.
+        // Strict identity binding: only resolve by stable OperatorOS
+        // identifiers (operatoros_user_id, then JWT sub stored in
+        // sso_subject). Emails can churn or collide and must NEVER be
+        // used to attach an OperatorOS sync payload to a local row —
+        // doing so risks mis-associating snapshots across accounts.
         let row = (await tx.select().from(users).where(eq(users.operatorosUserId, body.operatoros_user_id)))[0];
         if (!row && body.sub) {
           row = (await tx.select().from(users).where(eq(users.ssoSubject, body.sub)))[0];
-        }
-        if (!row) {
-          row = (await tx.select().from(users).where(eq(users.email, body.email.toLowerCase())))[0];
         }
         if (!row) {
           return { found: false as const };
