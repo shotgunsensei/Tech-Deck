@@ -143,6 +143,7 @@ describe("POST /api/operatoros/entitlements/sync", () => {
     expect(res.body.snapshot.enabled).toBe(true);
     expect(res.body.sessionsKilled).toBe(0);
     expect(state.updateCalls[0].localRole).toBe("ADMIN");
+    expect(state.updateCalls[0].ssoRole).toBe("ADMIN");
     expect(state.updateCalls[0].revokedAt).toBeNull();
   });
 

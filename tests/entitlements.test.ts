@@ -67,13 +67,10 @@ describe("entitlements / mapOperatorOsRole", () => {
     expect(mapOperatorOsRole("none", "owner")).toBeNull();
   });
 
-  it("tenant_role=owner maps to ADMIN (not OWNER) per spec", () => {
+  it("OperatorOS owner/admin signals all map to ADMIN (never OWNER)", () => {
     expect(mapOperatorOsRole("module_user", "owner")).toBe("ADMIN");
     expect(mapOperatorOsRole(undefined, "owner")).toBe("ADMIN");
-  });
-
-  it("only explicit module_role=owner escalates to OWNER", () => {
-    expect(mapOperatorOsRole("owner", undefined)).toBe("OWNER");
+    expect(mapOperatorOsRole("owner", undefined)).toBe("ADMIN");
   });
 
   it("tenant_admin and module_admin map to ADMIN", () => {

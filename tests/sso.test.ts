@@ -101,7 +101,7 @@ describe("SSO verifyToken", () => {
     if (!r.ok) expect(r.code).toBe("audience_mismatch");
   });
 
-  it("rejects token missing module_slug entirely", () => {
+  it("rejects token missing module_slug AND target_module_key entirely (denied as module_access_denied)", () => {
     const now = Math.floor(Date.now() / 1000);
     const token = jwt.sign(
       {
@@ -112,7 +112,9 @@ describe("SSO verifyToken", () => {
     );
     const r = verifyToken(token, cfg);
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.code).toBe("audience_mismatch");
+    // module_slug is now a soft alias; the authoritative target_module_key
+    // is missing too, so the request is denied at the module-access gate.
+    if (!r.ok) expect(r.code).toBe("module_access_denied");
   });
 });
 

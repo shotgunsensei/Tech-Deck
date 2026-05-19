@@ -218,10 +218,11 @@ export function verifyToken(token: string, cfg: SsoConfig): VerifyResult {
   if (claims.env !== cfg.env) {
     return { ok: false, status: 401, code: "env_mismatch", message: "Environment mismatch" };
   }
-  if (!claims.module_slug) {
-    return { ok: false, status: 401, code: "audience_mismatch", message: "Missing module_slug claim" };
-  }
-  if (claims.module_slug.toLowerCase() !== MODULE_SLUG) {
+  // Legacy `module_slug` claim is treated as a SOFT alias during rollout:
+  // we only check it when present. The authoritative module check is
+  // `target_module_key` below.
+  if (typeof claims.module_slug === "string"
+      && claims.module_slug.toLowerCase() !== MODULE_SLUG) {
     return { ok: false, status: 401, code: "audience_mismatch", message: "Module slug mismatch" };
   }
   if (!claims.jti || !claims.sub || !claims.email || !claims.iat || !claims.exp) {
@@ -391,7 +392,6 @@ export async function findOrCreateSsoUser(
       const inserted = await tx
         .insert(users)
         .values({
-          email,
           ssoSubject: input.ssoSubject,
           ...sharedUserFields,
         })

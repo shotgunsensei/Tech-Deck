@@ -195,7 +195,13 @@ export function registerOperatorOsRoutes(app: Express) {
       let sessionsKilled = 0;
       if (!enabled || !localRole) {
         try {
-          const killed = await db.execute(sql`DELETE FROM sessions WHERE sess->'passport'->>'user' = ${result.userId}`);
+          // This app stores `req.session.userId` (not passport.user).
+          // Match both shapes for safety across legacy + current sessions.
+          const killed = await db.execute(sql`
+            DELETE FROM sessions
+            WHERE sess->>'userId' = ${result.userId}
+               OR sess->'passport'->>'user' = ${result.userId}
+          `);
           sessionsKilled = (killed as any).rowCount ?? 0;
         } catch (err) {
           logger.warn({ err: err instanceof Error ? err.message : String(err) }, "[entitlement-sync] session kill failed");

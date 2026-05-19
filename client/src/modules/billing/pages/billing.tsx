@@ -22,6 +22,8 @@ interface EntitlementSnapshot {
   organizationId?: string;
   enabled: boolean;
   syncedAt: string;
+  moduleRole?: string;
+  tenantRole?: string;
 }
 
 interface EntitlementsResponse {
