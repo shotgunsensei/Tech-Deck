@@ -103,12 +103,16 @@ export function defaultLimitsFor(accessLevel: string): EntitlementLimits {
  * Returns null when access should be denied entirely (module_role=none).
  *
  * Mapping table (per spec point 5):
- *   tenant_role=owner                              → OWNER
- *   tenant_role=tenant_admin OR module_role=module_admin → ADMIN
- *   module_role=module_user                        → TECH
- *   module_role=viewer                             → CLIENT (read-only)
- *   module_role=none                               → null (deny)
- *   anything else recognised                       → TECH (safe default)
+ *   module_role=none                                  → null (deny)
+ *   tenant_role=owner|tenant_admin OR
+ *     module_role=owner|module_admin|admin             → ADMIN
+ *     (OperatorOS-driven users never claim local OWNER;
+ *      local OWNER is reserved for the legacy email/password
+ *      account that originally created the workspace.)
+ *   module_role=viewer                                → CLIENT (read-only)
+ *   module_role=module_user|tech|technician|member    → TECH
+ *   no recognised role at all                         → null (deny)
+ *   anything else recognised                          → TECH (safe default)
  */
 export function mapOperatorOsRole(
   moduleRole: string | undefined,
@@ -171,7 +175,10 @@ export function buildSnapshot(input: BuildSnapshotInput): EntitlementSnapshot {
     tenantRole: input.tenantRole?.toLowerCase(),
     organizationId: input.organizationId,
     operatorosUserId: input.operatorosUserId,
-    enabled: input.enabled !== false,
+    // Explicit deny: if OperatorOS sent module_role=none, force enabled=false
+    // so downstream snapshot consumers (middleware/UI) see a single unambiguous
+    // "no access" signal regardless of the target_module_enabled flag.
+    enabled: (input.moduleRole || "").toLowerCase() === "none" ? false : input.enabled !== false,
     syncedAt: new Date().toISOString(),
   };
 }

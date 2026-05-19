@@ -7,7 +7,8 @@ Each module lives under `server/modules/<name>/` and registers its routes from `
 | `account` | Per-user account settings, password change, MFA | Auth | No |
 | `admin` | System-wide tenant/user admin (system_admin only) | Auth | No |
 | `api` | API token management + `/v1/*` token-scoped public API | Mixed | No |
-| `billing` | Stripe subscription management, plans, usage, customer portal | Auth | – |
+| `billing` | OperatorOS-managed (Task #12). Reads `entitlement_snapshot_json`; `/api/billing/checkout-session` & `/api/billing/customer-portal` return **410 Gone**. Stripe webhook still records events for audit only — never writes `pausedAt`. Local plan switching removed. | Auth | – |
+| `operatoros` | Server-to-server entitlement sync at `POST /api/operatoros/entitlements/sync` (Bearer `OPERATOROS_SERVICE_TOKEN`, ≥32 chars, timing-safe compare, 60/min per `operatoros_user_id`). Upserts snapshot + `local_role`; sets `revoked_at` on revoke. | Auth | – |
 | `calendar` | Dispatch calendar appointments | Auth | No |
 | `core` | Tenants, clients, sites, assets, members, audit, CSV import/export | Auth | No |
 | `demo` | One-click sample data seed for empty workspaces | Auth (OWNER/ADMIN) | No |
