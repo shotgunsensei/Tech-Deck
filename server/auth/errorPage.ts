@@ -67,6 +67,10 @@ const SSO_EN: Translation = {
       title: "Something went wrong on our end",
       body: "We hit an unexpected error completing your sign-in. Please return to OperatorOS and try again.",
     },
+    module_access_denied: {
+      title: "Access to Tech Deck is managed by OperatorOS",
+      body: "Your OperatorOS account doesn't currently have access to Tech Deck. Please return to OperatorOS to enable this module or contact your administrator.",
+    },
   },
 };
 
@@ -126,6 +130,10 @@ const SSO_ES: Translation = {
     server_error: {
       title: "Algo salió mal en nuestro extremo",
       body: "Encontramos un error inesperado al completar tu inicio de sesión. Vuelve a OperatorOS e inténtalo de nuevo.",
+    },
+    module_access_denied: {
+      title: "El acceso a Tech Deck lo gestiona OperatorOS",
+      body: "Tu cuenta de OperatorOS no tiene acceso a Tech Deck en este momento. Vuelve a OperatorOS para habilitar este módulo o contacta con tu administrador.",
     },
   },
 };
@@ -187,6 +195,10 @@ const SSO_FR: Translation = {
       title: "Une erreur s'est produite de notre côté",
       body: "Une erreur inattendue est survenue lors de votre connexion. Veuillez retourner sur OperatorOS et réessayer.",
     },
+    module_access_denied: {
+      title: "L'accès à Tech Deck est géré par OperatorOS",
+      body: "Votre compte OperatorOS n'a pas actuellement accès à Tech Deck. Veuillez retourner sur OperatorOS pour activer ce module ou contacter votre administrateur.",
+    },
   },
 };
 
@@ -247,6 +259,10 @@ const SSO_DE: Translation = {
       title: "Auf unserer Seite ist etwas schiefgelaufen",
       body: "Beim Abschluss Ihrer Anmeldung ist ein unerwarteter Fehler aufgetreten. Bitte kehren Sie zu OperatorOS zurück und versuchen Sie es erneut.",
     },
+    module_access_denied: {
+      title: "Der Zugriff auf Tech Deck wird von OperatorOS verwaltet",
+      body: "Ihr OperatorOS-Konto hat derzeit keinen Zugriff auf Tech Deck. Bitte kehren Sie zu OperatorOS zurück, um dieses Modul zu aktivieren, oder wenden Sie sich an Ihren Administrator.",
+    },
   },
 };
 
@@ -306,6 +322,10 @@ const SSO_PT: Translation = {
     server_error: {
       title: "Algo correu mal do nosso lado",
       body: "Ocorreu um erro inesperado ao concluir o seu início de sessão. Volte ao OperatorOS e tente novamente.",
+    },
+    module_access_denied: {
+      title: "O acesso ao Tech Deck é gerido pelo OperatorOS",
+      body: "A sua conta OperatorOS não tem atualmente acesso ao Tech Deck. Volte ao OperatorOS para ativar este módulo ou contacte o seu administrador.",
     },
   },
 };

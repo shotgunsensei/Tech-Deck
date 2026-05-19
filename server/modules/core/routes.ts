@@ -732,17 +732,20 @@ export function registerCoreRoutes(app: Express) {
     }
   });
 
+  /**
+   * Task #12: legacy endpoint kept for backward compatibility. The truth
+   * now lives in the OperatorOS entitlement snapshot on the user record.
+   * UI should prefer GET /api/me/entitlements; this endpoint projects the
+   * snapshot into the same shape callers were already consuming.
+   */
   app.get("/api/tenant/pause-status", isAuthenticated, requireRole("OWNER", "ADMIN", "TECH", "CLIENT"), async (req: any, res) => {
     try {
-      const sub = await storage.getTenantSubscription(req.tenantCtx.tenantId);
-      if (!sub?.pausedAt) {
-        return res.json({ paused: false });
-      }
-      const pausedDate = new Date(sub.pausedAt);
-      const now = new Date();
-      const daysPaused = Math.floor((now.getTime() - pausedDate.getTime()) / (1000 * 60 * 60 * 24));
-      const daysRemaining = Math.max(0, 90 - daysPaused);
-      res.json({ paused: true, pausedAt: sub.pausedAt, daysRemaining, status: sub.status });
+      const profile = req.user?.profile as Record<string, unknown> | undefined;
+      const snap = profile?.entitlementSnapshotJson as { subscriptionStatus?: string } | null | undefined;
+      const status = snap?.subscriptionStatus;
+      const blocking = new Set(["past_due", "unpaid", "canceled"]);
+      const paused = !!status && blocking.has(status);
+      res.json({ paused, status: status ?? null, managedBy: "operatoros" });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

@@ -26,6 +26,7 @@ import { registerAuditSubscriber } from "./core/events/subscribers";
 import { startWebhookWorker } from "./modules/webhooks/worker";
 import { startGraceCleanupJob } from "./core/billing/graceCleanup";
 import { registerBillingRoutes } from "./modules/billing/routes";
+import { registerOperatorOsRoutes } from "./modules/operatoros/routes";
 import { registerStripeWebhook } from "./modules/billing/webhook";
 import { seedSubscriptionPlans, initStripeClient, isStripeConfigured, setStripePriceMap } from "./modules/billing/stripe";
 import { storage } from "./storage";
@@ -169,6 +170,7 @@ export async function registerRoutes(
     registerPortalRoutes(app);
     registerApiTokenAdminRoutes(app);
     registerBillingRoutes(app);
+    registerOperatorOsRoutes(app);
     registerAdminRoutes(app);
     registerTicketRoutes(app);
     registerCalendarRoutes(app);

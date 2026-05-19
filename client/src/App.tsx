@@ -46,8 +46,7 @@ const PortalInvoicesPage = lazy(() => import("@/modules/portal").then(m => ({ de
 
 const ApiTokensPage = lazy(() => import("@/modules/api").then(m => ({ default: m.ApiTokensPage })));
 const BillingPage = lazy(() => import("@/modules/billing").then(m => ({ default: m.BillingPage })));
-const BillingSuccessPage = lazy(() => import("@/modules/billing").then(m => ({ default: m.BillingSuccessPage })));
-const BillingCancelPage = lazy(() => import("@/modules/billing").then(m => ({ default: m.BillingCancelPage })));
+const AccessDeniedPage = lazy(() => import("@/pages/access-denied"));
 const AdminPanelPage = lazy(() => import("@/modules/admin").then(m => ({ default: m.AdminPanelPage })));
 const TicketsPage = lazy(() => import("@/modules/tickets").then(m => ({ default: m.TicketsPage })));
 const TicketDetailPage = lazy(() => import("@/modules/tickets").then(m => ({ default: m.TicketDetailPage })));
@@ -125,14 +124,16 @@ function AuthenticatedApp() {
     queryKey: ["/api/auth/admin-check"],
   });
 
-  const { data: pauseStatus } = useQuery<{ paused: boolean; daysRemaining?: number }>({
-    queryKey: ["/api/tenant/pause-status"],
+  const { data: entitlements } = useQuery<{ snapshot: { subscriptionStatus?: string } | null }>({
+    queryKey: ["/api/me/entitlements"],
     refetchInterval: 60000,
   });
 
   const [location] = useLocation();
   const isSystemAdmin = adminCheck?.isSystemAdmin === true;
-  const isPaused = pauseStatus?.paused === true;
+  const BLOCKING_STATUSES = new Set(["past_due", "unpaid", "canceled"]);
+  const isPaused = !!entitlements?.snapshot?.subscriptionStatus
+    && BLOCKING_STATUSES.has(entitlements.snapshot.subscriptionStatus);
 
   const role = (tenantInfo?.role ?? "TECH") as "OWNER" | "ADMIN" | "TECH" | "CLIENT";
   useMobileRedirect(!!tenantInfo && role !== "CLIENT" && !isPaused);
@@ -196,8 +197,6 @@ function AuthenticatedApp() {
                   <Route path="/evidence" component={EvidencePage} />
                   <Route path="/evidence/:id" component={EvidenceDetailPage} />
                   {isAdminOrOwner && <Route path="/billing" component={BillingPage} />}
-                  {isAdminOrOwner && <Route path="/billing/success" component={BillingSuccessPage} />}
-                  {isAdminOrOwner && <Route path="/billing/cancel" component={BillingCancelPage} />}
                   {isSystemAdmin && <Route path="/system-admin" component={AdminPanelPage} />}
                   <Route>{() => <Redirect to="/evidence" />}</Route>
                 </Switch>
@@ -239,8 +238,6 @@ function AuthenticatedApp() {
                   {isAdminOrOwner && <Route path="/status-admin" component={StatusAdminPage} />}
                   {isAdminOrOwner && <Route path="/api-tokens" component={ApiTokensPage} />}
                   {isAdminOrOwner && <Route path="/billing" component={BillingPage} />}
-                  {isAdminOrOwner && <Route path="/billing/success" component={BillingSuccessPage} />}
-                  {isAdminOrOwner && <Route path="/billing/cancel" component={BillingCancelPage} />}
                   {!isClient && <Route path="/reports" component={ReportsPage} />}
                   {!isClient && <Route path="/itops" component={ItOpsConsolePage} />}
                   {!isClient && <Route path="/secure-intake" component={IntakeDashboardPage} />}
@@ -276,6 +273,7 @@ function AppRouter() {
       <Route path="/terms">{() => <RouteShell><TermsPage /></RouteShell>}</Route>
       <Route path="/refund">{() => <RouteShell><RefundPage /></RouteShell>}</Route>
       <Route path="/pricing">{() => <RouteShell><PricingPage /></RouteShell>}</Route>
+      <Route path="/access-denied">{() => <RouteShell><AccessDeniedPage /></RouteShell>}</Route>
       <Route path="/delete-account">{() => <RouteShell><DeleteAccountPage /></RouteShell>}</Route>
       <Route path="/login">{() => <RouteShell><LoginPage /></RouteShell>}</Route>
       <Route path="/register">{() => <RouteShell><RegisterPage /></RouteShell>}</Route>

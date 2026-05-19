@@ -1,38 +1,43 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Download, CreditCard } from "lucide-react";
+import { AlertTriangle, Download, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 
-interface PauseStatus {
-  paused: boolean;
-  pausedAt?: string;
-  daysRemaining?: number;
-  status?: string;
+interface EntitlementsResponse {
+  snapshot: {
+    subscriptionStatus?: string;
+    enabled?: boolean;
+  } | null;
+  operatorosBillingUrl?: string;
 }
 
+const BLOCKING = new Set(["past_due", "unpaid", "canceled"]);
+
+/**
+ * Task #12: shows when the OperatorOS-managed subscription is not active.
+ * The banner deep-links to OperatorOS billing — no local checkout.
+ */
 export function PausedBanner() {
-  const { data } = useQuery<PauseStatus>({
-    queryKey: ["/api/tenant/pause-status"],
-    refetchInterval: 60000,
+  const { data } = useQuery<EntitlementsResponse>({
+    queryKey: ["/api/me/entitlements"],
+    refetchInterval: 60_000,
   });
 
-  if (!data?.paused) return null;
+  const status = data?.snapshot?.subscriptionStatus;
+  const blocked = !!status && BLOCKING.has(status);
+  if (!blocked) return null;
+
+  const operatorosUrl = data?.operatorosBillingUrl || "https://operatoros.app/billing";
 
   return (
-    <div
-      className="bg-destructive/10 border-b border-destructive/20 px-4 py-3"
-      data-testid="banner-paused"
-    >
+    <div className="bg-destructive/10 border-b border-destructive/20 px-4 py-3" data-testid="banner-paused">
       <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm">
           <AlertTriangle className="w-4 h-4 text-destructive shrink-0" />
           <div>
-            <span className="font-medium text-destructive">Account Paused</span>
+            <span className="font-medium text-destructive">Subscription {status?.replace("_", " ")}</span>
             <span className="text-muted-foreground ml-1">
-              - Your account has been paused due to a billing issue.
-              You can download your existing data for{" "}
-              <span className="font-semibold text-destructive">{data.daysRemaining} days</span>
-              {" "}before your data is permanently deleted.
+              — your OperatorOS subscription needs attention. Update billing in OperatorOS to restore full access.
             </span>
           </div>
         </div>
@@ -43,12 +48,12 @@ export function PausedBanner() {
               Download Data
             </Button>
           </Link>
-          <Link href="/billing">
-            <Button size="sm" data-testid="button-fix-billing">
-              <CreditCard className="w-3 h-3 mr-1" />
-              Fix Billing
-            </Button>
-          </Link>
+          <Button size="sm" asChild data-testid="button-fix-billing">
+            <a href={operatorosUrl} rel="noopener noreferrer">
+              <ExternalLink className="w-3 h-3 mr-1" />
+              Manage in OperatorOS
+            </a>
+          </Button>
         </div>
       </div>
     </div>

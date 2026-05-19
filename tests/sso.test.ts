@@ -13,6 +13,7 @@ const cfg: SsoConfig = {
   apiUrl: "https://operatoros.example/api",
   audience: MODULE_SLUG,
   env: "test",
+  moduleKey: MODULE_SLUG,
 };
 
 function makeToken(overrides: Record<string, unknown> = {}, signSecret = SECRET, alg: Algorithm = "HS256") {
@@ -28,6 +29,13 @@ function makeToken(overrides: Record<string, unknown> = {}, signSecret = SECRET,
     module_slug: MODULE_SLUG,
     plan_slug: "pro",
     organization_id: "acme",
+    // Task #12 entitlement claims.
+    target_module_key: MODULE_SLUG,
+    target_module_enabled: true,
+    target_module_access_level: "pro",
+    module_role: "module_admin",
+    tenant_role: "tenant_admin",
+    subscription_status: "active",
     jti: "jti-" + Math.random().toString(36).slice(2),
     iat: now,
     exp: now + 60,
@@ -332,9 +340,17 @@ describe("findOrCreateSsoUser concurrent provisioning", () => {
           ] as string | undefined;
           return {
             values: (_v: unknown) => ({
-              onConflictDoUpdate: (_o: unknown) => ({
-                returning: async () => [{ id: USER_ID, email: "alice@example.com" }],
-              }),
+              onConflictDoUpdate: (_o: unknown) => {
+                if (tableName === "tenant_members") {
+                  memberInsertAttempts.push(Date.now());
+                  if (memberExists) return Promise.resolve([]);
+                  memberExists = true;
+                  return Promise.resolve([{ id: "member-1" }]);
+                }
+                return {
+                  returning: async () => [{ id: USER_ID, email: "alice@example.com" }],
+                };
+              },
               onConflictDoNothing: (_o?: unknown) => {
                 if (tableName === "tenants") {
                   if (tenantExists) {
@@ -342,14 +358,6 @@ describe("findOrCreateSsoUser concurrent provisioning", () => {
                   }
                   tenantExists = true;
                   return { returning: async () => [{ id: TENANT_ID, slug: "os-acme" }] };
-                }
-                if (tableName === "tenant_members") {
-                  memberInsertAttempts.push(Date.now());
-                  if (memberExists) {
-                    return Promise.resolve([]);
-                  }
-                  memberExists = true;
-                  return Promise.resolve([{ id: "member-1" }]);
                 }
                 return { returning: async () => [] };
               },
@@ -379,6 +387,21 @@ describe("findOrCreateSsoUser concurrent provisioning", () => {
       role: "ADMIN" as const,
       planSlug: "pro",
       organizationId: "acme",
+      operatorosUserId: "os-user-1",
+      snapshot: {
+        schemaVersion: 1 as const,
+        planSlug: "pro",
+        subscriptionStatus: "active",
+        accessLevel: "pro",
+        features: [],
+        limits: {},
+        moduleRole: "module_admin",
+        tenantRole: "tenant_admin",
+        organizationId: "acme",
+        operatorosUserId: "os-user-1",
+        enabled: true,
+        syncedAt: new Date().toISOString(),
+      },
     };
 
     const [a, b] = await Promise.all([
@@ -420,7 +443,7 @@ describe("ssoErrorPage localization", () => {
     });
 
     it("falls back to English when no Accept-Language entry is supported", () => {
-      expect(pickLanguage("fr-FR,fr;q=0.9,de;q=0.5")).toBe("en");
+      expect(pickLanguage("zh-CN,zh;q=0.9,ja;q=0.5")).toBe("en");
     });
   });
 

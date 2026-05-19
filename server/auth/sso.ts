@@ -6,20 +6,22 @@ import { tenants, tenantMembers } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { logger } from "../logger";
 import { renderSsoErrorPage, ssoErrorPageOptionsFromRequest } from "./ssoErrorPage";
+import {
+  buildSnapshot,
+  mapOperatorOsRole,
+  type EntitlementSnapshot,
+  type EntitlementLimits,
+  type LocalRole,
+} from "./entitlements";
 
 export const MODULE_SLUG = "techdeck";
 const ISSUER = "operatoros";
 const MAX_TOKEN_AGE_SECONDS = 90;
 const CLOCK_SKEW_SECONDS = 5;
 const MIN_SECRET_LEN = 16;
-const ROLE_MAP: Record<string, "OWNER" | "ADMIN" | "TECH" | "CLIENT"> = {
-  owner: "OWNER",
-  admin: "ADMIN",
-  tech: "TECH",
-  technician: "TECH",
-  member: "TECH",
-  client: "CLIENT",
-};
+const MIN_SERVICE_TOKEN_LEN = 32;
+
+const CHILD_APP_MODULE_KEY = (process.env.CHILD_APP_MODULE_KEY || MODULE_SLUG).toLowerCase();
 
 export interface SsoConfig {
   secret: string;
@@ -27,6 +29,7 @@ export interface SsoConfig {
   apiUrl: string;
   audience: string;
   env: string;
+  moduleKey: string;
 }
 
 export interface SsoClaims extends JwtPayload {
@@ -36,6 +39,7 @@ export interface SsoClaims extends JwtPayload {
   sub: string;
   user_id?: string;
   email: string;
+  name?: string;
   role?: string;
   module_slug: string;
   plan_slug?: string;
@@ -44,6 +48,15 @@ export interface SsoClaims extends JwtPayload {
   jti: string;
   iat: number;
   exp: number;
+  // OperatorOS entitlement claims (Task #12).
+  target_module_key?: string;
+  target_module_enabled?: boolean;
+  target_module_access_level?: string;
+  target_module_features?: string[];
+  target_module_limits?: EntitlementLimits;
+  module_role?: string;
+  tenant_role?: string;
+  subscription_status?: string;
 }
 
 export type VerifyResult =
@@ -60,8 +73,11 @@ export type ConsumeResult =
  * - If MODULE_SSO_SECRET is unset AND MODULE_SSO_DISABLED is not "true" → throw
  *   (default-secure: instances adopting SSO MUST configure it explicitly).
  * - If MODULE_SSO_DISABLED=true → log a warning and return null; /sso then returns 503.
- *   This explicit opt-out exists for development sandboxes / instances that have not
- *   yet adopted SSO. There is no silent unsigned launch — verifyToken always requires HS256.
+ *
+ * Task #12 additions:
+ * - OPERATOROS_SERVICE_TOKEN is required when SSO is enabled (>= 32 chars).
+ *   It authenticates the server-to-server entitlement sync endpoint.
+ * - CHILD_APP_MODULE_KEY (default "techdeck") names the module this app binds to.
  */
 function loadConfigAtStartup(): SsoConfig | null {
   const secret = process.env.MODULE_SSO_SECRET;
@@ -87,14 +103,26 @@ function loadConfigAtStartup(): SsoConfig | null {
   const apiUrl = process.env.OPERATOROS_API_URL;
   const env = process.env.OPERATOROS_SSO_ENV;
   const audience = (process.env.OPERATOROS_SSO_AUDIENCE || MODULE_SLUG).toLowerCase();
+  const serviceToken = process.env.OPERATOROS_SERVICE_TOKEN;
   if (!baseUrl) throw new Error("[sso] OPERATOROS_BASE_URL is required when MODULE_SSO_SECRET is set");
   if (!apiUrl) throw new Error("[sso] OPERATOROS_API_URL is required when MODULE_SSO_SECRET is set");
   if (!env) throw new Error("[sso] OPERATOROS_SSO_ENV is required when MODULE_SSO_SECRET is set");
   if (audience !== MODULE_SLUG) {
     throw new Error(`[sso] OPERATOROS_SSO_AUDIENCE must be lowercase '${MODULE_SLUG}', got '${audience}'`);
   }
-  logger.info({ env, audience, apiUrl }, "[sso] OperatorOS SSO configured");
-  return { secret, baseUrl, apiUrl, audience, env };
+  if (!serviceToken) {
+    throw new Error(
+      "[sso] OPERATOROS_SERVICE_TOKEN is required when MODULE_SSO_SECRET is set. " +
+      "It authenticates POST /api/operatoros/entitlements/sync from OperatorOS.",
+    );
+  }
+  if (serviceToken.length < MIN_SERVICE_TOKEN_LEN) {
+    throw new Error(
+      `[sso] OPERATOROS_SERVICE_TOKEN must be at least ${MIN_SERVICE_TOKEN_LEN} characters (got ${serviceToken.length}).`,
+    );
+  }
+  logger.info({ env, audience, apiUrl, moduleKey: CHILD_APP_MODULE_KEY }, "[sso] OperatorOS SSO configured");
+  return { secret, baseUrl, apiUrl, audience, env, moduleKey: CHILD_APP_MODULE_KEY };
 }
 
 const startupConfig: SsoConfig | null = loadConfigAtStartup();
@@ -106,10 +134,6 @@ function errMessage(err: unknown): string {
 function wantsHtml(req: Request): boolean {
   const accept = req.headers.accept;
   if (typeof accept !== "string" || accept.length === 0) return false;
-  // Use express's q-value-aware negotiator. When the client lists both
-  // html and json, whichever has the higher q-value wins; ties resolve
-  // in the order listed in the `types` argument below — so JSON is the
-  // tiebreaker to keep API clients on the JSON contract.
   const best = req.accepts(["application/json", "text/html"]);
   return best === "text/html";
 }
@@ -123,11 +147,13 @@ function reject(
   cfg: SsoConfig | null,
   claimLang?: string,
 ) {
+  // Browser-friendly redirect for module_access_denied — we route to a public
+  // SPA page rather than rendering a translated error card, so the user lands
+  // in a fully-styled "managed by OperatorOS" experience.
+  if (code === "module_access_denied" && wantsHtml(req)) {
+    return res.redirect(303, "/access-denied");
+  }
   if (wantsHtml(req)) {
-    // A verified JWT `lang` claim is the most reliable signal of the user's
-    // preferred language — it reflects what they picked in OperatorOS — so it
-    // wins over `?lang=` and `Accept-Language`. Only forwarded after
-    // verifyToken succeeds; we never trust an unsigned token's lang claim.
     const baseOpts = ssoErrorPageOptionsFromRequest(req);
     const opts = claimLang ? { ...baseOpts, langOverride: claimLang } : baseOpts;
     const html = renderSsoErrorPage(code, message, cfg?.baseUrl, opts);
@@ -137,12 +163,6 @@ function reject(
   return res.status(status).json({ code, message });
 }
 
-/**
- * Unified SSO outcome logger. Emits a single log line per /sso request with
- * a consistent shape — outcome, code, jti, sub — so every accept and reject
- * path is auditable. Unknown values fall back to "<unverified>" rather than
- * silently dropping the field.
- */
 function logSsoOutcome(
   req: Request,
   outcome: "accept" | "reject",
@@ -214,6 +234,29 @@ export function verifyToken(token: string, cfg: SsoConfig): VerifyResult {
   if (nowSec - claims.iat > MAX_TOKEN_AGE_SECONDS + CLOCK_SKEW_SECONDS) {
     return { ok: false, status: 401, code: "expired", message: "Token older than 90 seconds" };
   }
+
+  // Task #12: enforce module entitlement claims. `target_module_key` is the
+  // new authoritative claim; we accept tokens without it for rollout-compat
+  // but require it to match this app when present. `target_module_enabled`
+  // and `module_role` together decide whether the user may enter.
+  if (typeof claims.target_module_key === "string") {
+    if (claims.target_module_key.toLowerCase() !== cfg.moduleKey) {
+      return { ok: false, status: 401, code: "audience_mismatch", message: "Target module key mismatch" };
+    }
+  }
+  const moduleEnabledClaim = claims.target_module_enabled;
+  const moduleRoleClaim = (claims.module_role || "").toLowerCase();
+  // Reject when the claim is explicitly false, OR when module_role is "none".
+  // Absence of the claim is permitted (legacy rollout) — only an explicit
+  // negative answer denies.
+  if (moduleEnabledClaim === false || moduleRoleClaim === "none") {
+    return {
+      ok: false,
+      status: 401,
+      code: "module_access_denied",
+      message: "Access to this module is managed by OperatorOS",
+    };
+  }
   return { ok: true, claims: claims as SsoClaims };
 }
 
@@ -261,9 +304,11 @@ export async function consumeToken(
 export interface FindOrCreateSsoUserInput {
   ssoSubject: string;
   email: string;
-  role: "OWNER" | "ADMIN" | "TECH" | "CLIENT";
+  role: LocalRole;
   planSlug?: string;
   organizationId?: string;
+  operatorosUserId?: string;
+  snapshot: EntitlementSnapshot;
 }
 
 export interface FindOrCreateSsoUserResult {
@@ -272,10 +317,16 @@ export interface FindOrCreateSsoUserResult {
 }
 
 /**
- * Idempotently provision the SSO user, tenant, and membership.
- * Identity is keyed on ssoSubject (the JWT `sub` claim) — never email — so renames are safe.
- * SSO-provisioned tenants are namespaced with an `os-` slug prefix so a hostile
- * organization_id claim can never collide with a locally-registered tenant.
+ * Idempotently provision the SSO user, tenant, and membership, AND persist
+ * the OperatorOS entitlement snapshot atomically inside the same transaction.
+ *
+ * Lookup order:
+ *   1. users.operatoros_user_id (new key, preferred)
+ *   2. users.sso_subject        (legacy key, fallback for pre-Task-#12 rows)
+ *
+ * On every login the snapshot, local_role, and last_entitlement_sync_at
+ * are overwritten — OperatorOS is the source of truth, so the latest
+ * answer wins.
  */
 export async function findOrCreateSsoUser(
   input: FindOrCreateSsoUserInput,
@@ -286,42 +337,74 @@ export async function findOrCreateSsoUser(
     .replace(/[^a-z0-9-]/g, "-")
     .slice(0, 50);
   const orgSlug = `os-${rawOrg}`;
+  const now = new Date();
 
-  // Wrap the whole provision flow in a single transaction so that concurrent
-  // /sso redirects for the same brand-new user can't race each other into
-  // unique-constraint violations. Each insert uses ON CONFLICT so the loser of
-  // any race silently falls back to the already-committed row.
   return await db.transaction(async (tx) => {
-    // ---- Users: upsert keyed on sso_subject (unique). ----
-    const upsertedUsers = await tx
-      .insert(users)
-      .values({
-        email,
-        ssoSubject: input.ssoSubject,
-        ssoRole: input.role,
-        ssoPlanSlug: input.planSlug,
-        ssoOrganizationId: input.organizationId,
-      })
-      .onConflictDoUpdate({
-        target: users.ssoSubject,
-        set: {
-          email,
-          ssoRole: input.role,
-          ssoPlanSlug: input.planSlug,
-          ssoOrganizationId: input.organizationId,
-          updatedAt: new Date(),
-        },
-      })
-      .returning();
-    const userRow = upsertedUsers[0];
+    // 1) Look up by operatoros_user_id first (Task #12 preferred key).
+    let userRow: typeof users.$inferSelect | undefined;
+    if (input.operatorosUserId) {
+      const found = await tx
+        .select()
+        .from(users)
+        .where(eq(users.operatorosUserId, input.operatorosUserId));
+      userRow = found[0];
+    }
+    // 2) Fall back to sso_subject for legacy rows.
+    if (!userRow) {
+      const found = await tx
+        .select()
+        .from(users)
+        .where(eq(users.ssoSubject, input.ssoSubject));
+      userRow = found[0];
+    }
 
-    // ---- Tenants: insert-or-select on the unique slug. ----
+    const sharedUserFields = {
+      email,
+      ssoRole: input.role,
+      ssoPlanSlug: input.planSlug,
+      ssoOrganizationId: input.organizationId,
+      operatorosUserId: input.operatorosUserId ?? null,
+      operatorosTenantId: input.organizationId ?? null,
+      localRole: input.role,
+      lastEntitlementSyncAt: now,
+      entitlementSnapshotJson: input.snapshot,
+      revokedAt: null,
+      updatedAt: now,
+    };
+
+    if (userRow) {
+      const updated = await tx
+        .update(users)
+        .set({ ...sharedUserFields, ssoSubject: input.ssoSubject })
+        .where(eq(users.id, userRow.id))
+        .returning();
+      userRow = updated[0];
+    } else {
+      // First time we've ever seen this user. Insert with ON CONFLICT so two
+      // concurrent /sso redirects for a brand-new user can't race into a
+      // unique-constraint violation on sso_subject.
+      const inserted = await tx
+        .insert(users)
+        .values({
+          email,
+          ssoSubject: input.ssoSubject,
+          ...sharedUserFields,
+        })
+        .onConflictDoUpdate({
+          target: users.ssoSubject,
+          set: sharedUserFields,
+        })
+        .returning();
+      userRow = inserted[0];
+    }
+
+    // Tenants: insert-or-select on the unique slug.
     const insertedTenants = await tx
       .insert(tenants)
       .values({
         name: input.organizationId || email,
         slug: orgSlug,
-        plan: input.planSlug || "free",
+        plan: input.snapshot.accessLevel,
       })
       .onConflictDoNothing({ target: tenants.slug })
       .returning();
@@ -334,27 +417,31 @@ export async function findOrCreateSsoUser(
       tenant = existing[0];
     }
     if (!tenant) {
-      // Should be unreachable: either we inserted, or a concurrent inserter committed first.
       throw new Error("[sso] failed to load tenant after upsert");
     }
 
-    // ---- Membership: insert-or-ignore on the (tenant_id, user_id) unique index. ----
+    // Membership: insert-or-update role on the (tenant_id, user_id) unique index.
     await tx
       .insert(tenantMembers)
       .values({
         tenantId: tenant.id,
-        userId: userRow.id,
+        userId: userRow!.id,
         role: input.role,
       })
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: [tenantMembers.tenantId, tenantMembers.userId],
+        set: { role: input.role },
+      });
 
-    return { userId: userRow.id, tenantId: tenant.id };
+    return { userId: userRow!.id, tenantId: tenant.id };
   });
 }
 
 export function getStartupConfig(): SsoConfig | null {
   return startupConfig;
 }
+
+export { mapOperatorOsRole } from "./entitlements";
 
 export function registerSsoRoutes(
   app: Express,
@@ -391,15 +478,38 @@ export function registerSsoRoutes(
       return reject(req, res, consumed.status, consumed.code, consumed.message, cfg, claimLang);
     }
 
-    const role = ROLE_MAP[(verified.claims.role || "tech").toLowerCase()] || "TECH";
+    const localRole = mapOperatorOsRole(verified.claims.module_role, verified.claims.tenant_role);
+    if (!localRole) {
+      logSsoOutcome(req, "reject", "module_access_denied", {
+        jti: verified.claims.jti, sub: verified.claims.sub,
+      });
+      return reject(req, res, 401, "module_access_denied",
+        "Access to this module is managed by OperatorOS", cfg, claimLang);
+    }
+
+    const snapshot = buildSnapshot({
+      planSlug: verified.claims.plan_slug,
+      subscriptionStatus: verified.claims.subscription_status,
+      accessLevel: verified.claims.target_module_access_level || verified.claims.plan_slug,
+      features: verified.claims.target_module_features,
+      limits: verified.claims.target_module_limits,
+      moduleRole: verified.claims.module_role,
+      tenantRole: verified.claims.tenant_role,
+      organizationId: verified.claims.organization_id,
+      operatorosUserId: verified.claims.user_id,
+      enabled: verified.claims.target_module_enabled !== false,
+    });
+
     let provisioned: FindOrCreateSsoUserResult;
     try {
       provisioned = await provisioner({
         ssoSubject: verified.claims.sub,
         email: verified.claims.email,
-        role,
+        role: localRole,
         planSlug: verified.claims.plan_slug,
         organizationId: verified.claims.organization_id,
+        operatorosUserId: verified.claims.user_id,
+        snapshot,
       });
     } catch (err) {
       logSsoOutcome(req, "reject", "server_error", {

@@ -1,34 +1,37 @@
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import {
-  CreditCard,
-  ExternalLink,
-  Check,
-  Zap,
-  Users,
-  HardDrive,
-  FileText,
-  Webhook,
-  Shield,
-  Globe,
-  Key,
-} from "lucide-react";
-import type { SubscriptionPlan, TenantSubscription } from "@shared/schema";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ExternalLink, FileText, HardDrive, Webhook, Users } from "lucide-react";
 
-interface BillingData {
-  plans: SubscriptionPlan[];
-  subscription: TenantSubscription | null;
+interface EntitlementSnapshot {
+  schemaVersion: number;
+  planSlug: string;
+  subscriptionStatus: string;
+  accessLevel: string;
+  features: string[];
+  limits: {
+    usersMax?: number;
+    storageGb?: number;
+    reportsPerMonth?: number;
+    webhooksMax?: number;
+    intakeSpacesMax?: number;
+  };
+  organizationId?: string;
+  enabled: boolean;
+  syncedAt: string;
 }
 
-interface SubscriptionData {
-  subscription: TenantSubscription | null;
-  plan: SubscriptionPlan | null;
+interface EntitlementsResponse {
+  snapshot: EntitlementSnapshot | null;
+  operatorosBillingUrl: string;
+  lastSyncAt: string | null;
+  managedBy: "operatoros";
+}
+
+interface SubscriptionResponse {
   usage: {
     reportsGenerated: number;
     webhookDeliveries: number;
@@ -36,85 +39,21 @@ interface SubscriptionData {
   } | null;
 }
 
-const PLAN_FEATURES: Record<string, string[]> = {
-  solo: [
-    "1 user",
-    "1 GB storage",
-    "5 reports per month",
-    "2 webhook endpoints",
-    "Basic evidence management",
-  ],
-  pro: [
-    "Up to 5 users",
-    "25 GB storage",
-    "50 reports per month",
-    "10 webhook endpoints",
-    "API access",
-    "Client portal",
-    "Status pages",
-  ],
-  msp: [
-    "Up to 25 users",
-    "100 GB storage",
-    "500 reports per month",
-    "50 webhook endpoints",
-    "API access",
-    "Client portal",
-    "Status pages",
-  ],
-  enterprise: [
-    "Unlimited users",
-    "Unlimited storage",
-    "Unlimited reports",
-    "Unlimited webhooks",
-    "Full API access",
-    "Client portal",
-    "Status pages",
-    "Priority support",
-  ],
-};
-
-const PLAN_ICONS: Record<string, typeof Zap> = {
-  solo: Shield,
-  pro: Zap,
-  msp: Globe,
-  enterprise: Key,
-};
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return "0 B";
-  const k = 1024;
-  const sizes = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
-}
-
-function UsageBar({
-  label,
-  icon: Icon,
-  current,
-  max,
-  unit,
-}: {
-  label: string;
-  icon: typeof Users;
-  current: number;
-  max: number;
-  unit?: string;
+function UsageBar({ label, icon: Icon, current, max, unit = "" }: {
+  label: string; icon: any; current: number; max: number; unit?: string;
 }) {
-  const pct = max > 0 ? Math.min((current / max) * 100, 100) : 0;
-  const displayMax = max <= 0 ? "Unlimited" : `${max}${unit ? " " + unit : ""}`;
-  const displayCurrent = `${current}${unit ? " " + unit : ""}`;
-
+  const pct = max > 0 ? Math.min(100, (current / max) * 100) : 0;
+  const isWarn = pct >= 80;
+  const isOver = pct >= 100;
   return (
-    <div className="space-y-1.5" data-testid={`usage-${label.toLowerCase().replace(/\s+/g, "-")}`}>
-      <div className="flex items-center justify-between gap-2 text-sm">
-        <span className="flex items-center gap-2 text-muted-foreground">
-          <Icon className="w-4 h-4" />
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between text-xs">
+        <span className="flex items-center gap-1.5 text-muted-foreground">
+          <Icon className="w-3.5 h-3.5" />
           {label}
         </span>
-        <span className="font-medium">
-          {displayCurrent} / {displayMax}
+        <span className={isOver ? "text-destructive font-medium" : isWarn ? "text-amber-600 font-medium" : "text-muted-foreground"}>
+          {current}{unit} / {max}{unit}
         </span>
       </div>
       {max > 0 && <Progress value={pct} className="h-1.5" />}
@@ -122,208 +61,124 @@ function UsageBar({
   );
 }
 
-export default function BillingPage() {
-  const { toast } = useToast();
+const STATUS_BADGE: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+  active: { label: "Active", variant: "default" },
+  trialing: { label: "Trial", variant: "secondary" },
+  past_due: { label: "Past Due", variant: "destructive" },
+  unpaid: { label: "Unpaid", variant: "destructive" },
+  canceled: { label: "Canceled", variant: "destructive" },
+  none: { label: "Inactive", variant: "outline" },
+};
 
-  const { data: billingData, isLoading: plansLoading } = useQuery<BillingData>({
-    queryKey: ["/api/billing/plans"],
+/**
+ * Task #12 read-only billing page. All plan changes happen in OperatorOS;
+ * here we only display the current entitlement snapshot and provide a deep
+ * link back to OperatorOS billing.
+ */
+export default function BillingPage() {
+  const { data, isLoading } = useQuery<EntitlementsResponse>({
+    queryKey: ["/api/me/entitlements"],
   });
 
-  const { data: subData, isLoading: subLoading } = useQuery<SubscriptionData>({
+  const { data: subData } = useQuery<SubscriptionResponse>({
     queryKey: ["/api/billing/subscription"],
   });
 
-  const checkoutMutation = useMutation({
-    mutationFn: async (planCode: string) => {
-      const res = await apiRequest("POST", "/api/billing/checkout-session", { planCode });
-      return res.json();
-    },
-    onSuccess: (data: { url: string }) => {
-      if (data.url) {
-        window.location.href = data.url;
-      }
-    },
-    onError: (err: any) => {
-      toast({
-        title: "Checkout Error",
-        description: err.message || "Failed to start checkout",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const portalMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/billing/customer-portal");
-      return res.json();
-    },
-    onSuccess: (data: { url: string }) => {
-      if (data.url) {
-        window.location.href = data.url;
-      }
-    },
-    onError: (err: any) => {
-      toast({
-        title: "Portal Error",
-        description: err.message || "Failed to open billing portal",
-        variant: "destructive",
-      });
-    },
-  });
-
-  if (plansLoading || subLoading) {
+  if (isLoading) {
     return (
-      <div className="p-6 space-y-6">
+      <div className="p-6 space-y-6 max-w-3xl mx-auto">
         <Skeleton className="h-8 w-64" />
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-72" />
-          ))}
-        </div>
+        <Skeleton className="h-48" />
+        <Skeleton className="h-32" />
       </div>
     );
   }
 
-  const plans = billingData?.plans || [];
-  const subscription = subData?.subscription;
-  const currentPlan = subData?.plan;
+  const snap = data?.snapshot;
   const usage = subData?.usage;
-  const activePlanCode = subscription?.planCode || "solo";
-  const isActive = subscription?.status === "active" || subscription?.status === "trialing";
-
-  const sortedPlans = [...plans].sort((a, b) => a.monthlyPriceCents - b.monthlyPriceCents);
+  const operatorosUrl = data?.operatorosBillingUrl || "https://operatoros.app/billing";
+  const status = STATUS_BADGE[snap?.subscriptionStatus || "none"] || STATUS_BADGE.none;
 
   return (
-    <div className="p-6 space-y-8 max-w-6xl mx-auto">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold" data-testid="text-billing-title">Billing & Subscription</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Manage your subscription plan and usage
-          </p>
-        </div>
-        {subscription?.stripeCustomerId && (
-          <Button
-            variant="outline"
-            onClick={() => portalMutation.mutate()}
-            disabled={portalMutation.isPending}
-            data-testid="button-manage-billing"
-          >
-            <CreditCard className="w-4 h-4 mr-2" />
-            Manage Billing
-            <ExternalLink className="w-3 h-3 ml-1" />
-          </Button>
-        )}
+    <div className="p-6 space-y-6 max-w-3xl mx-auto">
+      <div>
+        <h1 className="text-2xl font-semibold" data-testid="text-billing-title">Billing & Subscription</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Your plan is managed by OperatorOS. All subscription changes happen in your OperatorOS account.
+        </p>
       </div>
 
-      {currentPlan && usage && (
-        <Card data-testid="card-current-plan">
-          <CardHeader className="pb-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <CardTitle className="text-lg flex items-center gap-2">
-                Current Plan: {currentPlan.name}
-                {isActive && <Badge variant="default" data-testid="badge-plan-status">Active</Badge>}
-                {subscription?.status === "trialing" && (
-                  <Badge variant="secondary" data-testid="badge-plan-status">Trial</Badge>
-                )}
-                {subscription?.cancelAtPeriodEnd && (
-                  <Badge variant="destructive" data-testid="badge-cancel-pending">Cancelling</Badge>
-                )}
-              </CardTitle>
-              {subscription?.currentPeriodEnd && (
-                <span className="text-xs text-muted-foreground" data-testid="text-period-end">
-                  {subscription.cancelAtPeriodEnd ? "Expires" : "Renews"}{" "}
-                  {new Date(subscription.currentPeriodEnd).toLocaleDateString()}
-                </span>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
+      <Card data-testid="card-current-plan">
+        <CardHeader className="pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle className="text-lg flex items-center gap-2">
+              Current Plan: <span data-testid="text-plan-name">{snap?.accessLevel || "—"}</span>
+              <Badge variant={status.variant} data-testid="badge-plan-status">{status.label}</Badge>
+            </CardTitle>
+            {data?.lastSyncAt && (
+              <span className="text-xs text-muted-foreground" data-testid="text-last-sync">
+                Last synced {new Date(data.lastSyncAt).toLocaleString()}
+              </span>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {snap && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <UsageBar
+                label="Users"
+                icon={Users}
+                current={0}
+                max={snap.limits.usersMax || 0}
+              />
+              <UsageBar
+                label="Storage"
+                icon={HardDrive}
+                current={Math.round((usage?.evidenceBytesStored || 0) / (1024 * 1024 * 1024))}
+                max={snap.limits.storageGb || 0}
+                unit="GB"
+              />
               <UsageBar
                 label="Reports"
                 icon={FileText}
-                current={usage.reportsGenerated}
-                max={(currentPlan.limits as any)?.reportsPerMonth || 0}
+                current={usage?.reportsGenerated || 0}
+                max={snap.limits.reportsPerMonth || 0}
                 unit="/mo"
               />
               <UsageBar
                 label="Webhooks"
                 icon={Webhook}
-                current={usage.webhookDeliveries}
-                max={(currentPlan.limits as any)?.webhooksMax || 0}
+                current={usage?.webhookDeliveries || 0}
+                max={snap.limits.webhooksMax || 0}
               />
-              <UsageBar
-                label="Storage"
-                icon={HardDrive}
-                current={Math.round(usage.evidenceBytesStored / (1024 * 1024 * 1024))}
-                max={(currentPlan.limits as any)?.storageGb || 0}
-                unit="GB"
-              />
+            </div>
+          )}
+
+          <div className="pt-2 border-t">
+            <Button asChild className="w-full sm:w-auto" data-testid="button-manage-billing">
+              <a href={operatorosUrl} rel="noopener noreferrer">
+                Manage Billing in OperatorOS
+                <ExternalLink className="w-3.5 h-3.5 ml-2" />
+              </a>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {snap?.features && snap.features.length > 0 && (
+        <Card data-testid="card-features">
+          <CardHeader>
+            <CardTitle className="text-base">Included Features</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {snap.features.map((f) => (
+                <Badge key={f} variant="secondary" data-testid={`badge-feature-${f}`}>{f}</Badge>
+              ))}
             </div>
           </CardContent>
         </Card>
       )}
-
-      <div>
-        <h2 className="text-lg font-medium mb-4">Available Plans</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {sortedPlans.map((plan) => {
-            const isCurrent = plan.code === activePlanCode;
-            const PlanIcon = PLAN_ICONS[plan.code] || Shield;
-            const features = PLAN_FEATURES[plan.code] || [];
-
-            return (
-              <Card
-                key={plan.id}
-                className={isCurrent ? "border-primary" : ""}
-                data-testid={`card-plan-${plan.code}`}
-              >
-                <CardHeader className="pb-2">
-                  <div className="flex items-center gap-2 mb-1">
-                    <PlanIcon className="w-5 h-5 text-muted-foreground" />
-                    <CardTitle className="text-base">{plan.name}</CardTitle>
-                  </div>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-2xl font-bold" data-testid={`text-plan-price-${plan.code}`}>
-                      ${Math.round(plan.monthlyPriceCents / 100)}
-                    </span>
-                    <span className="text-sm text-muted-foreground">/month</span>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <ul className="space-y-2 text-sm">
-                    {features.map((feat, i) => (
-                      <li key={i} className="flex items-start gap-2">
-                        <Check className="w-4 h-4 text-green-500 mt-0.5 shrink-0" />
-                        <span className="text-muted-foreground">{feat}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  {isCurrent ? (
-                    <Button variant="secondary" className="w-full" disabled data-testid={`button-plan-current-${plan.code}`}>
-                      Current Plan
-                    </Button>
-                  ) : plan.monthlyPriceCents === 0 ? (
-                    <Button variant="secondary" className="w-full" disabled data-testid={`button-plan-free-${plan.code}`}>
-                      Free Plan
-                    </Button>
-                  ) : (
-                    <Button
-                      className="w-full"
-                      onClick={() => checkoutMutation.mutate(plan.code)}
-                      disabled={checkoutMutation.isPending}
-                      data-testid={`button-plan-subscribe-${plan.code}`}
-                    >
-                      {checkoutMutation.isPending ? "Processing..." : "Subscribe"}
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      </div>
     </div>
   );
 }
