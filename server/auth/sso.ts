@@ -15,21 +15,21 @@ import {
 } from "./entitlements";
 
 export const MODULE_SLUG = "techdeck";
-const ISSUER = "operatoros";
+const LEGACY_ISSUER = "operatoros";
 const MAX_TOKEN_AGE_SECONDS = 90;
 const CLOCK_SKEW_SECONDS = 5;
-const MIN_SECRET_LEN = 16;
+const MIN_SECRET_LEN = 32;
 const MIN_SERVICE_TOKEN_LEN = 32;
-
-const CHILD_APP_MODULE_KEY = (process.env.CHILD_APP_MODULE_KEY || MODULE_SLUG).toLowerCase();
 
 export interface SsoConfig {
   secret: string;
   baseUrl: string;
   apiUrl: string;
+  expectedIssuer: string;
   audience: string;
   env: string;
   moduleKey: string;
+  allowLegacyIssuer: boolean;
 }
 
 export interface SsoClaims extends JwtPayload {
@@ -67,48 +67,90 @@ export type ConsumeResult =
   | { ok: true }
   | { ok: false; status: number; code: string; message: string };
 
+function isProd(): boolean {
+  return process.env.NODE_ENV === "production";
+}
+
+function stripTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, "");
+}
+
+function normalizeAbsoluteUrl(raw: string | undefined, name: string): string {
+  const value = (raw || "").trim();
+  if (!value) throw new Error(`[sso] ${name} is required when SSO is enabled`);
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error(`[sso] ${name} must be a valid absolute URL`);
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw new Error(`[sso] ${name} must use http or https`);
+  }
+  return stripTrailingSlash(parsed.toString());
+}
+
+function normalizeSlug(raw: string | undefined, name: string): string {
+  const value = (raw || "").trim().toLowerCase();
+  if (!value) throw new Error(`[sso] ${name} is required when SSO is enabled`);
+  return value;
+}
+
 /**
  * Eagerly validate SSO configuration at module load.
  * - If MODULE_SSO_SECRET is set but invalid → throw (server fails to boot, fails closed).
- * - If MODULE_SSO_SECRET is unset AND MODULE_SSO_DISABLED is not "true" → throw
- *   (default-secure: instances adopting SSO MUST configure it explicitly).
- * - If MODULE_SSO_DISABLED=true → log a warning and return null; /sso then returns 503.
- *
- * Task #12 additions:
+ * - If MODULE_SSO_SECRET is unset in production → throw.
+ * - If MODULE_SSO_SECRET is unset outside production → disable /sso with a warning.
+ * - If MODULE_SSO_DISABLED=true in production → throw.
  * - OPERATOROS_SERVICE_TOKEN is required when SSO is enabled (>= 32 chars).
  *   It authenticates the server-to-server entitlement sync endpoint.
- * - CHILD_APP_MODULE_KEY (default "techdeck") names the module this app binds to.
+ * - CHILD_APP_MODULE_KEY must be "techdeck".
  */
 function loadConfigAtStartup(): SsoConfig | null {
   const secret = process.env.MODULE_SSO_SECRET;
   const disabled = process.env.MODULE_SSO_DISABLED === "true";
   if (!secret) {
-    if (!disabled) {
+    if (isProd()) {
       throw new Error(
-        "[sso] MODULE_SSO_SECRET is required. To explicitly disable SSO on this instance, " +
-        "set MODULE_SSO_DISABLED=true.",
+        "[sso] MODULE_SSO_SECRET is required in production. " +
+        "OperatorOS SSO cannot be disabled in production.",
       );
     }
-    logger.warn(
-      "[sso] MODULE_SSO_DISABLED=true — OperatorOS SSO is DISABLED. /sso will return 503.",
-    );
+    if (disabled) {
+      logger.warn(
+        "[sso] MODULE_SSO_DISABLED=true — OperatorOS SSO is DISABLED. /sso will return 503.",
+      );
+    } else {
+      logger.warn(
+        "[sso] MODULE_SSO_SECRET is not set outside production — OperatorOS SSO is disabled. /sso will return 503.",
+      );
+    }
     return null;
+  }
+  if (disabled && isProd()) {
+    throw new Error("[sso] MODULE_SSO_DISABLED=true is not allowed in production");
   }
   if (secret.length < MIN_SECRET_LEN) {
     throw new Error(
       `[sso] MODULE_SSO_SECRET must be at least ${MIN_SECRET_LEN} characters (got ${secret.length}).`,
     );
   }
-  const baseUrl = process.env.OPERATOROS_BASE_URL;
-  const apiUrl = process.env.OPERATOROS_API_URL;
-  const env = process.env.OPERATOROS_SSO_ENV;
-  const audience = (process.env.OPERATOROS_SSO_AUDIENCE || MODULE_SLUG).toLowerCase();
+  const baseUrl = normalizeAbsoluteUrl(process.env.OPERATOROS_BASE_URL, "OPERATOROS_BASE_URL");
+  const apiUrl = normalizeAbsoluteUrl(process.env.OPERATOROS_API_URL, "OPERATOROS_API_URL");
+  const expectedIssuer = normalizeAbsoluteUrl(
+    process.env.OPERATOROS_ISSUER || process.env.OPERATOROS_BASE_URL,
+    "OPERATOROS_ISSUER",
+  );
+  const env = (process.env.OPERATOROS_SSO_ENV || "").trim();
+  const audience = normalizeSlug(process.env.OPERATOROS_SSO_AUDIENCE, "OPERATOROS_SSO_AUDIENCE");
+  const moduleKey = normalizeSlug(process.env.CHILD_APP_MODULE_KEY, "CHILD_APP_MODULE_KEY");
   const serviceToken = process.env.OPERATOROS_SERVICE_TOKEN;
-  if (!baseUrl) throw new Error("[sso] OPERATOROS_BASE_URL is required when MODULE_SSO_SECRET is set");
-  if (!apiUrl) throw new Error("[sso] OPERATOROS_API_URL is required when MODULE_SSO_SECRET is set");
   if (!env) throw new Error("[sso] OPERATOROS_SSO_ENV is required when MODULE_SSO_SECRET is set");
   if (audience !== MODULE_SLUG) {
     throw new Error(`[sso] OPERATOROS_SSO_AUDIENCE must be lowercase '${MODULE_SLUG}', got '${audience}'`);
+  }
+  if (moduleKey !== MODULE_SLUG) {
+    throw new Error(`[sso] CHILD_APP_MODULE_KEY must be lowercase '${MODULE_SLUG}', got '${moduleKey}'`);
   }
   if (!serviceToken) {
     throw new Error(
@@ -121,8 +163,15 @@ function loadConfigAtStartup(): SsoConfig | null {
       `[sso] OPERATOROS_SERVICE_TOKEN must be at least ${MIN_SERVICE_TOKEN_LEN} characters (got ${serviceToken.length}).`,
     );
   }
-  logger.info({ env, audience, apiUrl, moduleKey: CHILD_APP_MODULE_KEY }, "[sso] OperatorOS SSO configured");
-  return { secret, baseUrl, apiUrl, audience, env, moduleKey: CHILD_APP_MODULE_KEY };
+  const allowLegacyIssuer = process.env.OPERATOROS_SSO_ALLOW_LEGACY_ISSUER === "true";
+  if (allowLegacyIssuer) {
+    logger.warn(
+      { expectedIssuer, legacyIssuer: LEGACY_ISSUER },
+      "[sso] OPERATOROS_SSO_ALLOW_LEGACY_ISSUER=true — accepting legacy iss temporarily",
+    );
+  }
+  logger.info({ env, audience, apiUrl, moduleKey, expectedIssuer }, "[sso] OperatorOS SSO configured");
+  return { secret, baseUrl, apiUrl, expectedIssuer, audience, env, moduleKey, allowLegacyIssuer };
 }
 
 const startupConfig: SsoConfig | null = loadConfigAtStartup();
@@ -185,13 +234,34 @@ function logSsoOutcome(
 export function verifyToken(token: string, cfg: SsoConfig): VerifyResult {
   const allowedAlgs: Algorithm[] = ["HS256"];
   let decoded: JwtPayload;
+  const decodedToken = jwt.decode(token, { complete: true });
+  if (!decodedToken || typeof decodedToken !== "object" || !decodedToken.header) {
+    return { ok: false, status: 400, code: "bad_request", message: "Malformed token" };
+  }
+  if (decodedToken.header.alg !== "HS256") {
+    return { ok: false, status: 401, code: "signature_invalid", message: "Invalid token algorithm" };
+  }
   try {
-    const result = jwt.verify(token, cfg.secret, {
-      algorithms: allowedAlgs,
-      audience: cfg.audience,
-      issuer: ISSUER,
-      clockTolerance: CLOCK_SKEW_SECONDS,
-    });
+    let result: string | JwtPayload;
+    try {
+      result = jwt.verify(token, cfg.secret, {
+        algorithms: allowedAlgs,
+        audience: cfg.audience,
+        issuer: cfg.expectedIssuer,
+        clockTolerance: CLOCK_SKEW_SECONDS,
+      });
+    } catch (err) {
+      const msg = errMessage(err);
+      if (!cfg.allowLegacyIssuer || !msg.includes("issuer")) {
+        throw err;
+      }
+      result = jwt.verify(token, cfg.secret, {
+        algorithms: allowedAlgs,
+        audience: cfg.audience,
+        issuer: LEGACY_ISSUER,
+        clockTolerance: CLOCK_SKEW_SECONDS,
+      });
+    }
     if (typeof result === "string") {
       return { ok: false, status: 401, code: "signature_invalid", message: "Token payload is not an object" };
     }
@@ -208,21 +278,25 @@ export function verifyToken(token: string, cfg: SsoConfig): VerifyResult {
     if (msg.includes("issuer")) {
       return { ok: false, status: 401, code: "issuer_mismatch", message: "Issuer mismatch" };
     }
+    if (msg.includes("jwt malformed") || msg.includes("invalid token")) {
+      return { ok: false, status: 400, code: "bad_request", message: "Malformed token" };
+    }
     return { ok: false, status: 401, code: "signature_invalid", message: "Invalid signature" };
   }
 
   const claims = decoded as Partial<SsoClaims>;
-  if (!claims.iss || claims.iss !== ISSUER) {
+  const legacyIssuerAllowed = cfg.allowLegacyIssuer && claims.iss === LEGACY_ISSUER;
+  if (!claims.iss || (claims.iss !== cfg.expectedIssuer && !legacyIssuerAllowed)) {
     return { ok: false, status: 401, code: "issuer_mismatch", message: "Issuer mismatch" };
+  }
+  if (claims.aud !== cfg.audience) {
+    return { ok: false, status: 401, code: "audience_mismatch", message: "Audience mismatch" };
   }
   if (claims.env !== cfg.env) {
     return { ok: false, status: 401, code: "env_mismatch", message: "Environment mismatch" };
   }
-  // Legacy `module_slug` claim is treated as a SOFT alias during rollout:
-  // we only check it when present. The authoritative module check is
-  // `target_module_key` below.
-  if (typeof claims.module_slug === "string"
-      && claims.module_slug.toLowerCase() !== MODULE_SLUG) {
+  if (typeof claims.module_slug !== "string"
+      || claims.module_slug.toLowerCase() !== cfg.audience) {
     return { ok: false, status: 401, code: "audience_mismatch", message: "Module slug mismatch" };
   }
   if (!claims.jti || !claims.sub || !claims.email || !claims.iat || !claims.exp) {
@@ -236,12 +310,8 @@ export function verifyToken(token: string, cfg: SsoConfig): VerifyResult {
     return { ok: false, status: 401, code: "expired", message: "Token older than 90 seconds" };
   }
 
-  // Task #12: enforce module entitlement claims. `target_module_key` is the
-  // new authoritative claim; we accept tokens without it for rollout-compat
-  // but require it to match this app when present. `target_module_enabled`
-  // and `module_role` together decide whether the user may enter.
-  // Task #12: target_module_key and target_module_enabled are AUTHORITATIVE
-  // and REQUIRED. A token lacking either claim cannot grant module access.
+  // OperatorOS module claims are authoritative and required. A token lacking
+  // the target key, enabled flag, or positive module role cannot grant access.
   if (typeof claims.target_module_key !== "string"
       || claims.target_module_key.toLowerCase() !== cfg.moduleKey) {
     return {
@@ -255,7 +325,7 @@ export function verifyToken(token: string, cfg: SsoConfig): VerifyResult {
   const moduleRoleClaim = (claims.module_role || "").toLowerCase();
   // Require explicit enabled=true. Anything else (false, undefined, non-bool)
   // is denial. module_role=none also denies.
-  if (moduleEnabledClaim !== true || moduleRoleClaim === "none") {
+  if (moduleEnabledClaim !== true || !moduleRoleClaim || moduleRoleClaim === "none") {
     return {
       ok: false,
       status: 401,
@@ -273,11 +343,11 @@ export async function consumeToken(
 ): Promise<ConsumeResult> {
   let response: globalThis.Response;
   try {
-    response = await fetch(`${cfg.apiUrl.replace(/\/$/, "")}/v1/modules/sso/consume`, {
+    response = await fetch(`${cfg.apiUrl}/v1/modules/sso/consume`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Module-Slug": MODULE_SLUG,
+        "X-Module-Slug": cfg.moduleKey,
         ...(reqId ? { "X-Request-Id": reqId } : {}),
       },
       body: JSON.stringify({ jti, aud: cfg.audience, env: cfg.env }),
@@ -310,6 +380,7 @@ export async function consumeToken(
 export interface FindOrCreateSsoUserInput {
   ssoSubject: string;
   email: string;
+  name?: string;
   role: LocalRole;
   planSlug?: string;
   organizationId?: string;
@@ -320,6 +391,16 @@ export interface FindOrCreateSsoUserInput {
 export interface FindOrCreateSsoUserResult {
   userId: string;
   tenantId: string;
+}
+
+function splitDisplayName(name: string | undefined): { firstName?: string; lastName?: string } {
+  const cleaned = (name || "").trim().replace(/\s+/g, " ");
+  if (!cleaned) return {};
+  const [firstName, ...rest] = cleaned.split(" ");
+  return {
+    firstName,
+    lastName: rest.length > 0 ? rest.join(" ") : undefined,
+  };
 }
 
 /**
@@ -344,6 +425,7 @@ export async function findOrCreateSsoUser(
     .slice(0, 50);
   const orgSlug = `os-${rawOrg}`;
   const now = new Date();
+  const displayName = splitDisplayName(input.name);
 
   return await db.transaction(async (tx) => {
     // 1) Look up by operatoros_user_id first (Task #12 preferred key).
@@ -376,6 +458,8 @@ export async function findOrCreateSsoUser(
       entitlementSnapshotJson: input.snapshot,
       revokedAt: null,
       updatedAt: now,
+      ...(displayName.firstName ? { firstName: displayName.firstName } : {}),
+      ...(displayName.lastName ? { lastName: displayName.lastName } : {}),
     };
 
     if (userRow) {
@@ -420,6 +504,15 @@ export async function findOrCreateSsoUser(
         .from(tenants)
         .where(eq(tenants.slug, orgSlug));
       tenant = existing[0];
+      if (tenant) {
+        await tx
+          .update(tenants)
+          .set({
+            name: input.organizationId || email,
+            plan: input.snapshot.accessLevel,
+          })
+          .where(eq(tenants.id, tenant.id));
+      }
     }
     if (!tenant) {
       throw new Error("[sso] failed to load tenant after upsert");
@@ -510,6 +603,7 @@ export function registerSsoRoutes(
       provisioned = await provisioner({
         ssoSubject: verified.claims.sub,
         email: verified.claims.email,
+        name: verified.claims.name,
         role: localRole,
         planSlug: verified.claims.plan_slug,
         organizationId: verified.claims.organization_id,

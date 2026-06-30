@@ -51,7 +51,7 @@ Tech Deck ships with **8 modules**, all enabled by default:
 - **Frontend**: React 18 + Vite + TypeScript, wouter (routing), TanStack Query v5 (data), shadcn/ui + Tailwind CSS (UI)
 - **Backend**: Express + TypeScript (single port serves API and SPA)
 - **Database**: PostgreSQL + Drizzle ORM
-- **Auth**: Replit Auth (OIDC) via passport / openid-client
+- **Auth**: OperatorOS SSO for production launches, with local password auth reserved for dev/test and emergency system-admin access
 - **Storage**: Local disk via `StorageProvider` abstraction (S3-ready)
 - **Events**: In-process typed event bus with automatic audit logging
 
@@ -68,7 +68,7 @@ Tech Deck ships with **8 modules**, all enabled by default:
    | `DATABASE_URL` | PostgreSQL connection string (auto-set by Replit DB) |
    | `SESSION_SECRET` | Random string for signing session cookies |
 
-   Replit Auth secrets (`REPL_ID`, `ISSUER_URL`) are provided automatically when Auth is configured.
+   Production instances also require the OperatorOS SSO secrets listed below.
 
 4. **Push the schema**:
    ```
@@ -101,6 +101,28 @@ npm run start
 | `DEV_USER_ID` | `dev-user` | User ID when auth bypass is active |
 | `DEV_USER_EMAIL` | `dev@localhost` | Email when auth bypass is active |
 | `DEV_TENANT_SLUG` | `dev` | Tenant slug when auth bypass is active |
+
+## OperatorOS SSO
+
+Tech Deck is an OperatorOS child application. Production access is launched through `GET /sso?token=<jwt>`, validated locally, consumed through OperatorOS, and then converted into a Tech Deck session.
+
+Required production env vars:
+
+| Variable | Purpose |
+|---|---|
+| `MODULE_SSO_SECRET` | Shared HS256 SSO secret, at least 32 characters |
+| `OPERATOROS_BASE_URL` | Canonical OperatorOS base URL and default expected issuer |
+| `OPERATOROS_ISSUER` | Optional canonical issuer override; defaults to `OPERATOROS_BASE_URL` |
+| `OPERATOROS_API_URL` | OperatorOS API base used for `/v1/modules/sso/consume` |
+| `OPERATOROS_SSO_ENV` | Exact environment claim to accept |
+| `OPERATOROS_SSO_AUDIENCE` | Must be `techdeck` |
+| `OPERATOROS_SERVICE_TOKEN` | Server-to-server entitlement sync token, at least 32 characters |
+| `CHILD_APP_MODULE_KEY` | Must be `techdeck` |
+| `VITE_OPERATOROS_URL` | Browser recovery link for access denied; falls back to `VITE_OPERATOROS_BASE_URL` |
+
+Direct registration is disabled in production. Direct password login is limited to explicit local system-admin emergency accounts; normal users must launch from OperatorOS.
+
+See [OperatorOS SSO Contract](docs/OPERATOROS_SSO.md) for claim validation, consume behavior, entitlement sync, revocation, and local-login policy.
 
 ---
 
@@ -135,6 +157,7 @@ See [docs/SECURITY.md](docs/SECURITY.md) for full details.
 - [Release Notes v1.0.0](docs/RELEASE_NOTES_v1.md)
 - [Security Policy](docs/SECURITY.md)
 - [Deployment Guide (Replit)](docs/DEPLOYMENT_REPLIT.md)
+- [OperatorOS SSO Contract](docs/OPERATOROS_SSO.md)
 - [Test Checklist](docs/TEST_CHECKLIST.md)
 
 ---

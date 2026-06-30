@@ -37,6 +37,10 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+function isProduction(): boolean {
+  return process.env.NODE_ENV === "production";
+}
+
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
@@ -54,6 +58,16 @@ export function registerAuthRoutes(app: Express): void {
 
   app.post("/api/auth/register", authLimiter, csrfProtection, async (req: Request, res: Response) => {
     try {
+      if (isProduction()) {
+        return sendAuthError(
+          req,
+          res,
+          403,
+          "local_register_disabled",
+          "Direct registration is disabled. Launch Tech Deck from OperatorOS.",
+        );
+      }
+
       const parsed = registerSchema.safeParse(req.body);
       if (!parsed.success) {
         return sendAuthError(
@@ -102,6 +116,16 @@ export function registerAuthRoutes(app: Express): void {
         parsed.data.email,
         parsed.data.password
       );
+
+      if (isProduction() && user.isSystemAdmin !== true) {
+        return sendAuthError(
+          req,
+          res,
+          403,
+          "local_login_disabled",
+          "Direct password login is reserved for system administrators. Launch Tech Deck from OperatorOS.",
+        );
+      }
 
       req.session.regenerate((err) => {
         if (err) {

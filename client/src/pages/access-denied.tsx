@@ -9,7 +9,9 @@ import { ShieldOff, ExternalLink } from "lucide-react";
  */
 export default function AccessDeniedPage() {
   const operatorosUrl =
-    (import.meta.env.VITE_OPERATOROS_URL as string | undefined) || "https://operatoros.app";
+    (import.meta.env.VITE_OPERATOROS_URL as string | undefined)
+    || (import.meta.env.VITE_OPERATOROS_BASE_URL as string | undefined)
+    || "https://operatoros.net";
 
   return (
     <div

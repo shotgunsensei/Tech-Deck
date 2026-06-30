@@ -9,8 +9,20 @@
 
 ## Authentication
 
-- [ ] Clicking "Log in with Replit" redirects to OIDC provider
-- [ ] After login, user is redirected to onboarding (first visit) or dashboard
+- [ ] Launching Tech Deck from OperatorOS redirects to `/sso?token=...`
+- [ ] Valid OperatorOS token redirects to the Tech Deck dashboard
+- [ ] Wrong `iss`, `aud`, `env`, or module key is rejected before consume
+- [ ] Expired, replayed, or old `iat` token is rejected before session creation
+- [ ] Consume call posts to `${OPERATOROS_API_URL}/v1/modules/sso/consume`
+- [ ] Consume replay returns stable JSON `{ code: "consume_failed", message }`
+- [ ] `module_access_denied` browser flow lands on `/access-denied`
+- [ ] `/access-denied` links back to OperatorOS
+- [ ] Entitlement sync updates the stored snapshot and local role
+- [ ] Entitlement sync with `target_module_enabled=false` revokes access and kills existing sessions
+- [ ] Revoked users cannot continue using an existing session
+- [ ] Direct registration is blocked in production
+- [ ] Direct password login in production is limited to local system-admin emergency accounts
+- [ ] After SSO login, user is redirected to onboarding (first visit) or dashboard
 - [ ] Onboarding creates a tenant with the provided organization name
 - [ ] Logout clears the session and redirects to the login page
 

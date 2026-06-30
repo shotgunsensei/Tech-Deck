@@ -8,6 +8,10 @@ import {
   defaultLimitsFor,
 } from "../server/auth/entitlements";
 
+vi.hoisted(() => {
+  process.env.DATABASE_URL = process.env.DATABASE_URL || "postgres://techdeck:test@localhost:5432/techdeck_test";
+});
+
 describe("entitlements / buildSnapshot", () => {
   it("fills features and limits from access level when claims omit them", () => {
     const snap = buildSnapshot({ planSlug: "pro", accessLevel: "pro" });

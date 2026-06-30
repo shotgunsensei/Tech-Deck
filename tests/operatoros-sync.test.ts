@@ -111,6 +111,16 @@ describe("POST /api/operatoros/entitlements/sync", () => {
     expect(res.status).toBe(401);
   });
 
+  it("rejects different-length bearer tokens without leaking timing details", async () => {
+    const app = makeApp();
+    const res = await request(app)
+      .post("/api/operatoros/entitlements/sync")
+      .set("Authorization", "Bearer short")
+      .send(validBody);
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe("unauthorized");
+  });
+
   it("rejects payload for a different module (400)", async () => {
     const app = makeApp();
     const res = await request(app)
@@ -129,6 +139,18 @@ describe("POST /api/operatoros/entitlements/sync", () => {
       .send({ operatoros_user_id: "x" }); // missing email
     expect(res.status).toBe(400);
     expect(res.body.code).toBe("bad_request");
+  });
+
+  it("rejects missing target_module_enabled (400)", async () => {
+    const app = makeApp();
+    const { target_module_enabled, ...body } = validBody;
+    const res = await request(app)
+      .post("/api/operatoros/entitlements/sync")
+      .set("Authorization", `Bearer ${SERVICE_TOKEN}`)
+      .send(body);
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("bad_request");
+    void target_module_enabled;
   });
 
   it("happy path: persists snapshot, reflects role, no sessions killed", async () => {

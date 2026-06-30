@@ -6,25 +6,32 @@ import jwt, { type Algorithm } from "jsonwebtoken";
 import { verifyToken, consumeToken, registerSsoRoutes, MODULE_SLUG, type SsoConfig } from "../server/auth/sso";
 import { renderSsoErrorPage, pickLanguage } from "../server/auth/ssoErrorPage";
 
+vi.hoisted(() => {
+  process.env.DATABASE_URL = process.env.DATABASE_URL || "postgres://techdeck:test@localhost:5432/techdeck_test";
+});
+
 const SECRET = "x".repeat(32);
 const cfg: SsoConfig = {
   secret: SECRET,
   baseUrl: "https://operatoros.example",
   apiUrl: "https://operatoros.example/api",
+  expectedIssuer: "https://operatoros.example",
   audience: MODULE_SLUG,
   env: "test",
   moduleKey: MODULE_SLUG,
+  allowLegacyIssuer: false,
 };
 
 function makeToken(overrides: Record<string, unknown> = {}, signSecret = SECRET, alg: Algorithm = "HS256") {
   const now = Math.floor(Date.now() / 1000);
   const payload = {
-    iss: "operatoros",
+    iss: cfg.expectedIssuer,
     aud: MODULE_SLUG,
     env: "test",
     sub: "user-123",
     user_id: "user-123",
     email: "alice@example.com",
+    name: "Alice Admin",
     role: "admin",
     module_slug: MODULE_SLUG,
     plan_slug: "pro",
@@ -50,8 +57,29 @@ describe("SSO verifyToken", () => {
     expect(r.ok).toBe(true);
   });
 
+  it("accepts the canonical OperatorOS URL issuer", () => {
+    const r = verifyToken(makeToken({ iss: "https://operatoros.example" }), cfg);
+    expect(r.ok).toBe(true);
+  });
+
   it("rejects bad signature", () => {
     const r = verifyToken(makeToken({}, "wrong-secret-wrong-secret"), cfg);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("signature_invalid");
+  });
+
+  it("rejects alg=none before trusting claims", () => {
+    const [, payload] = makeToken().split(".");
+    const header = Buffer.from(JSON.stringify({ alg: "none", typ: "JWT" })).toString("base64url");
+    const r = verifyToken(`${header}.${payload}.`, cfg);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("signature_invalid");
+  });
+
+  it("rejects non-HS256 algorithms", () => {
+    const [, payload, signature] = makeToken().split(".");
+    const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");
+    const r = verifyToken(`${header}.${payload}.${signature}`, cfg);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.code).toBe("signature_invalid");
   });
@@ -66,6 +94,17 @@ describe("SSO verifyToken", () => {
     const r = verifyToken(makeToken({ iss: "evil" }), cfg);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.code).toBe("issuer_mismatch");
+  });
+
+  it("rejects legacy operatoros issuer by default", () => {
+    const r = verifyToken(makeToken({ iss: "operatoros" }), cfg);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("issuer_mismatch");
+  });
+
+  it("accepts legacy operatoros issuer only when compatibility is explicit", () => {
+    const r = verifyToken(makeToken({ iss: "operatoros" }), { ...cfg, allowLegacyIssuer: true });
+    expect(r.ok).toBe(true);
   });
 
   it("rejects wrong env", () => {
@@ -101,34 +140,71 @@ describe("SSO verifyToken", () => {
     if (!r.ok) expect(r.code).toBe("audience_mismatch");
   });
 
-  it("rejects token missing module_slug AND target_module_key entirely (denied as module_access_denied)", () => {
+  it("rejects missing module_slug", () => {
+    const r = verifyToken(makeToken({ module_slug: undefined }), cfg);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("audience_mismatch");
+  });
+
+  it("rejects missing target_module_key", () => {
     const now = Math.floor(Date.now() / 1000);
     const token = jwt.sign(
       {
-        iss: "operatoros", aud: MODULE_SLUG, env: "test",
-        sub: "u", email: "a@b.com", jti: "j", iat: now, exp: now + 60,
+        iss: cfg.expectedIssuer, aud: MODULE_SLUG, env: "test",
+        sub: "u", email: "a@b.com", module_slug: MODULE_SLUG, jti: "j", iat: now, exp: now + 60,
       },
       SECRET, { algorithm: "HS256" },
     );
     const r = verifyToken(token, cfg);
     expect(r.ok).toBe(false);
-    // module_slug is now a soft alias; the authoritative target_module_key
-    // is missing too, so the request is denied at the module-access gate.
     if (!r.ok) expect(r.code).toBe("module_access_denied");
+  });
+
+  it("rejects wrong target_module_key", () => {
+    const r = verifyToken(makeToken({ target_module_key: "other" }), cfg);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("module_access_denied");
+  });
+
+  it("rejects target_module_enabled=false", () => {
+    const r = verifyToken(makeToken({ target_module_enabled: false }), cfg);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("module_access_denied");
+  });
+
+  it("rejects module_role=none", () => {
+    const r = verifyToken(makeToken({ module_role: "none" }), cfg);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("module_access_denied");
+  });
+
+  it("rejects missing module_role", () => {
+    const r = verifyToken(makeToken({ module_role: undefined }), cfg);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("module_access_denied");
+  });
+
+  it("rejects missing jti", () => {
+    const r = verifyToken(makeToken({ jti: undefined }), cfg);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("signature_invalid");
   });
 });
 
 describe("SSO consumeToken", () => {
   beforeEach(() => { vi.restoreAllMocks(); });
 
-  it("sends {jti, aud, env} payload to consume endpoint", async () => {
+  it("sends {jti, aud, env} payload and OperatorOS headers to consume endpoint", async () => {
     const fetchSpy = vi.fn(async () => ({ status: 200, json: async () => ({}) } as unknown as Response));
     vi.stubGlobal("fetch", fetchSpy);
-    await consumeToken(cfg, "jti-abc");
+    await consumeToken(cfg, "jti-abc", "req-123");
     const callArgs = fetchSpy.mock.calls[0];
     expect(callArgs[0]).toBe("https://operatoros.example/api/v1/modules/sso/consume");
     const body = JSON.parse((callArgs[1] as RequestInit).body as string);
     expect(body).toEqual({ jti: "jti-abc", aud: MODULE_SLUG, env: "test" });
+    const headers = (callArgs[1] as RequestInit).headers as Record<string, string>;
+    expect(headers["X-Module-Slug"]).toBe(MODULE_SLUG);
+    expect(headers["X-Request-Id"]).toBe("req-123");
   });
 
   it("returns ok on 200", async () => {
@@ -144,11 +220,30 @@ describe("SSO consumeToken", () => {
     if (!r.ok) expect(r.code).toBe("consume_failed");
   });
 
+  it("maps TOKEN_UNKNOWN to consume_failed", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ status: 404, json: async () => ({ code: "TOKEN_UNKNOWN" }) } as unknown as Response)));
+    const r = await consumeToken(cfg, "jti-unknown");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("consume_failed");
+  });
+
   it("maps TOKEN_EXPIRED to expired", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ status: 410, json: async () => ({ error: "TOKEN_EXPIRED" }) } as unknown as Response)));
     const r = await consumeToken(cfg, "jti-3");
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.code).toBe("expired");
+  });
+
+  it("maps consume audience and env mismatches", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ status: 400, json: async () => ({ code: "AUDIENCE_MISMATCH" }) } as unknown as Response)));
+    const audience = await consumeToken(cfg, "jti-aud");
+    expect(audience.ok).toBe(false);
+    if (!audience.ok) expect(audience.code).toBe("audience_mismatch");
+
+    vi.stubGlobal("fetch", vi.fn(async () => ({ status: 400, json: async () => ({ code: "ENV_MISMATCH" }) } as unknown as Response)));
+    const env = await consumeToken(cfg, "jti-env");
+    expect(env.ok).toBe(false);
+    if (!env.ok) expect(env.code).toBe("env_mismatch");
   });
 
   it("maps 5xx to sso_consume_unavailable (fail-closed)", async () => {
@@ -258,6 +353,7 @@ describe("/sso route", () => {
     expect(provisionSpy).toHaveBeenCalledWith(expect.objectContaining({
       ssoSubject: "user-123",
       email: "alice@example.com",
+      name: "Alice Admin",
       role: "ADMIN",
       organizationId: "acme",
       planSlug: "pro",
@@ -321,6 +417,84 @@ describe("/sso route", () => {
 describe("findOrCreateSsoUser concurrent provisioning", () => {
   beforeEach(() => { vi.resetModules(); });
 
+  it("does not bind an SSO user by email alone", async () => {
+    let selectCalls = 0;
+    let insertedEmail: string | undefined;
+
+    function makeTx() {
+      return {
+        select: () => ({
+          from: () => ({
+            where: async () => {
+              selectCalls += 1;
+              return [];
+            },
+          }),
+        }),
+        insert: (table: unknown) => {
+          const tableName = (table as { [k: string]: unknown })[
+            Object.getOwnPropertySymbols(table as object).find(
+              (s) => s.description === "drizzle:Name",
+            ) as symbol
+          ] as string | undefined;
+          return {
+            values: (v: any) => {
+              if (tableName === "users") insertedEmail = v.email;
+              return {
+                onConflictDoUpdate: () => ({
+                  returning: async () => [{ id: "new-user-id", email: insertedEmail }],
+                }),
+                onConflictDoNothing: () => ({
+                  returning: async () => [{ id: "tenant-id", slug: "os-acme" }],
+                }),
+              };
+            },
+          };
+        },
+        update: () => ({
+          set: () => ({
+            where: async () => [],
+          }),
+        }),
+      };
+    }
+
+    vi.doMock("../server/db", () => ({
+      db: {
+        transaction: async <T,>(fn: (tx: ReturnType<typeof makeTx>) => Promise<T>) => fn(makeTx()),
+      },
+    }));
+
+    const { findOrCreateSsoUser } = await import("../server/auth/sso");
+    const result = await findOrCreateSsoUser({
+      ssoSubject: "sub-new",
+      email: "shared@example.com",
+      name: "Shared Email",
+      role: "TECH",
+      planSlug: "pro",
+      organizationId: "acme",
+      operatorosUserId: "os-user-new",
+      snapshot: {
+        schemaVersion: 1,
+        planSlug: "pro",
+        subscriptionStatus: "active",
+        accessLevel: "pro",
+        features: [],
+        limits: {},
+        moduleRole: "tech",
+        tenantRole: undefined,
+        organizationId: "acme",
+        operatorosUserId: "os-user-new",
+        enabled: true,
+        syncedAt: new Date().toISOString(),
+      },
+    });
+
+    expect(result).toEqual({ userId: "new-user-id", tenantId: "tenant-id" });
+    expect(insertedEmail).toBe("shared@example.com");
+    expect(selectCalls).toBe(2);
+  });
+
   it("two simultaneous calls for the same new user both succeed, no duplicate member rows", async () => {
     // Simulate two concurrent transactions racing to provision the same brand-new SSO user.
     // Caller A "wins" every insert; caller B sees ON CONFLICT DO NOTHING return empty
@@ -369,6 +543,11 @@ describe("findOrCreateSsoUser concurrent provisioning", () => {
         select: () => ({
           from: (_t: unknown) => ({
             where: async () => (tenantExists ? [{ id: TENANT_ID, slug: "os-acme" }] : []),
+          }),
+        }),
+        update: (_t: unknown) => ({
+          set: (_v: unknown) => ({
+            where: async () => [],
           }),
         }),
       };

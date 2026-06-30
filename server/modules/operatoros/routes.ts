@@ -39,8 +39,8 @@ const BodySchema = z.object({
   sub: z.string().min(1).max(200).optional(),
   email: z.string().email().max(320),
   organization_id: z.string().max(200).optional(),
-  target_module_key: z.string().max(100).optional(),
-  target_module_enabled: z.boolean().optional(),
+  target_module_key: z.string().min(1).max(100),
+  target_module_enabled: z.boolean(),
   target_module_access_level: z.string().max(50).optional(),
   target_module_features: z.array(z.string().max(50)).max(50).optional(),
   target_module_limits: z.record(z.string(), z.number()).optional(),
@@ -49,6 +49,9 @@ const BodySchema = z.object({
   module_role: z.string().max(50).optional(),
   tenant_role: z.string().max(50).optional(),
 });
+
+const MODULE_SLUG = "techdeck";
+const MIN_SERVICE_TOKEN_LEN = 32;
 
 function safeEqual(a: string, b: string): boolean {
   const ab = Buffer.from(a);
@@ -64,7 +67,7 @@ function safeEqual(a: string, b: string): boolean {
 
 export function registerOperatorOsRoutes(app: Express) {
   const serviceToken = process.env.OPERATOROS_SERVICE_TOKEN;
-  const moduleKey = (process.env.CHILD_APP_MODULE_KEY || "techdeck").toLowerCase();
+  const moduleKey = (process.env.CHILD_APP_MODULE_KEY || MODULE_SLUG).toLowerCase();
 
   const limiter = rateLimit({
     windowMs: 60_000,
@@ -85,6 +88,10 @@ export function registerOperatorOsRoutes(app: Express) {
     if (!serviceToken) {
       return res.status(503).json({ code: "sync_not_configured", message: "Entitlement sync is not configured" });
     }
+    if (serviceToken.length < MIN_SERVICE_TOKEN_LEN || moduleKey !== MODULE_SLUG) {
+      logger.error({ moduleKey }, "[entitlement-sync] invalid OperatorOS sync configuration");
+      return res.status(503).json({ code: "sync_not_configured", message: "Entitlement sync is not configured" });
+    }
 
     const auth = req.headers.authorization || "";
     const presented = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
@@ -99,11 +106,11 @@ export function registerOperatorOsRoutes(app: Express) {
     }
     const body = parsed.data;
 
-    if (body.target_module_key && body.target_module_key.toLowerCase() !== moduleKey) {
+    if (body.target_module_key.toLowerCase() !== moduleKey) {
       return res.status(400).json({ code: "module_mismatch", message: "Payload targets a different module" });
     }
 
-    const enabled = body.target_module_enabled !== false;
+    const enabled = body.target_module_enabled === true;
     const localRole = mapOperatorOsRole(body.module_role, body.tenant_role);
 
     const snapshot = buildSnapshot({

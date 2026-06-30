@@ -371,6 +371,18 @@ const AUTH_EN: Translation = {
       title: "That email is already registered",
       body: "An account with this email address already exists. Please sign in instead, or use a different email to register.",
     },
+    local_register_disabled: {
+      title: "Registration is managed by OperatorOS",
+      body: "Direct Tech Deck registration is disabled in production. Please launch Tech Deck from OperatorOS or contact your administrator.",
+    },
+    local_login_disabled: {
+      title: "Sign in from OperatorOS",
+      body: "Direct password login is reserved for system administrators in production. Please return to OperatorOS and launch Tech Deck from there.",
+    },
+    module_access_denied: {
+      title: "Access is managed by OperatorOS",
+      body: "Your current session no longer has Tech Deck access. Please return to OperatorOS to refresh access or contact your administrator.",
+    },
     registration_failed: {
       title: "We couldn't create your account",
       body: "Something went wrong creating your account. Please return to the sign-up page and try again.",
