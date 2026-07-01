@@ -44,7 +44,7 @@ export function EmptyState({
         </p>
       )}
       {(action || secondaryAction) && (
-        <div className="flex items-center gap-2 mt-2">
+        <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
           {action && (action.href ? (
             <Button asChild variant={action.variant ?? "default"} data-testid={action.testId ?? "button-empty-action"}>
               <Link href={action.href}>{action.label}</Link>

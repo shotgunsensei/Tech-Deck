@@ -122,7 +122,7 @@ export default function BillingPage() {
         </p>
       </div>
 
-      <Card data-testid="card-current-plan">
+      <Card className="command-surface" data-testid="card-current-plan">
         <CardHeader className="pb-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle className="text-lg flex items-center gap-2">
@@ -180,7 +180,7 @@ export default function BillingPage() {
       </Card>
 
       {snap?.features && snap.features.length > 0 && (
-        <Card data-testid="card-features">
+        <Card className="command-surface" data-testid="card-features">
           <CardHeader>
             <CardTitle className="text-base">Included Features</CardTitle>
           </CardHeader>

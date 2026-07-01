@@ -37,10 +37,11 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   render() {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback;
+      const errorMessage = import.meta.env.DEV ? this.state.error?.message : undefined;
 
       return (
         <div className="flex items-center justify-center min-h-[60vh] p-6" data-testid="error-boundary">
-          <div className="max-w-md text-center space-y-4">
+          <div className="command-surface max-w-md text-center space-y-4 p-8">
             <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-destructive/10 text-destructive">
               <AlertTriangle className="w-6 h-6" />
             </div>
@@ -48,9 +49,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             <p className="text-sm text-muted-foreground">
               This page hit an unexpected error. You can try again, or reload the app if it persists.
             </p>
-            {this.state.error && (
+            {errorMessage && (
               <pre className="text-xs text-left bg-muted/50 p-3 rounded-md overflow-auto max-h-40">
-                {this.state.error.message}
+                {errorMessage}
               </pre>
             )}
             <div className="flex items-center justify-center gap-2 pt-2">

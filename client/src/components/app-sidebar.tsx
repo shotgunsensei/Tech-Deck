@@ -1,35 +1,38 @@
 import {
-  LayoutDashboard,
-  Users,
-  Server,
-  FileText,
-  Settings,
-  Building2,
-  MapPin,
-  KeyRound,
-  Key,
-  Code,
-  Webhook,
-  Shield,
   Activity,
-  ClipboardList,
-  Home,
-  CreditCard,
-  ShieldCheck,
-  TicketIcon,
+  BookOpen,
+  Building2,
   CalendarDays,
   Clock,
+  Code,
+  CreditCard,
+  LayoutDashboard,
+  FileText,
+  Home,
+  Key,
+  KeyRound,
+  Lock,
+  LogOut,
+  MapPin,
   Receipt,
-  BookOpen,
   Repeat,
-  Wrench,
+  Server,
+  Settings,
+  Shield,
+  ShieldCheck,
   Smartphone,
   Terminal,
+  TicketIcon,
   Upload,
+  Users,
+  Webhook,
+  ChevronUp,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import logoImage from "@assets/ShotgunNinjaVaulticon_1770412982737.png";
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { useQuery } from "@tanstack/react-query";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Sidebar,
@@ -50,9 +53,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { LogOut, ChevronUp } from "lucide-react";
 import type { MemberRole } from "@shared/schema";
 import { PlanBadge } from "@/components/plan-badge";
+import { Badge } from "@/components/ui/badge";
+import {
+  getSidebarSections,
+  routeMatches,
+  type NavIconKey,
+} from "@/lib/route-manifest";
 
 interface AppSidebarProps {
   role: MemberRole;
@@ -60,83 +68,70 @@ interface AppSidebarProps {
   isPaused?: boolean;
 }
 
+const iconMap: Record<NavIconKey, LucideIcon> = {
+  activity: Activity,
+  book: BookOpen,
+  building: Building2,
+  calendar: CalendarDays,
+  clock: Clock,
+  code: Code,
+  creditCard: CreditCard,
+  dashboard: LayoutDashboard,
+  file: FileText,
+  home: Home,
+  key: Key,
+  keyRound: KeyRound,
+  mapPin: MapPin,
+  receipt: Receipt,
+  repeat: Repeat,
+  server: Server,
+  shield: Shield,
+  shieldCheck: ShieldCheck,
+  smartphone: Smartphone,
+  terminal: Terminal,
+  ticket: TicketIcon,
+  upload: Upload,
+  users: Users,
+  webhook: Webhook,
+  wrench: Settings,
+};
+
+interface EntitlementsResponse {
+  snapshot: {
+    features?: string[];
+    enabled?: boolean;
+    subscriptionStatus?: string;
+  } | null;
+}
+
+function navTestId(title: string) {
+  return `nav-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}`;
+}
+
 export function AppSidebar({ role, isSystemAdmin = false, isPaused = false }: AppSidebarProps) {
   const [location, setLocation] = useLocation();
   const { user, logout } = useAuth();
 
-  const isClient = role === "CLIENT";
   const isAdminOrOwner = role === "OWNER" || role === "ADMIN";
+  const { data: entitlements } = useQuery<EntitlementsResponse>({
+    queryKey: ["/api/me/entitlements"],
+    staleTime: 60_000,
+  });
 
-  const portalNavItems = isClient && !isPaused
-    ? [
-        { title: "Portal", url: "/portal", icon: Home, show: true },
-        { title: "My Tickets", url: "/portal/tickets", icon: TicketIcon, show: true },
-        { title: "My Invoices", url: "/portal/invoices", icon: Receipt, show: true },
-        { title: "My Evidence", url: "/portal/evidence", icon: FileText, show: true },
-      ].filter((item) => item.show)
-    : [];
-
-  const mainNavItems = isPaused
-    ? [
-        { title: "Evidence", url: "/evidence", icon: FileText, show: true },
-      ].filter((item) => item.show)
-    : isClient
-      ? []
-      : [
-          { title: "Dashboard", url: "/", icon: LayoutDashboard, show: true },
-          { title: "Tickets", url: "/tickets", icon: TicketIcon, show: true },
-          { title: "Calendar", url: "/calendar", icon: CalendarDays, show: true },
-          { title: "Time Tracking", url: "/time", icon: Clock, show: true },
-          { title: "Clients", url: "/clients", icon: Users, show: true },
-          { title: "Sites", url: "/sites", icon: MapPin, show: true },
-          { title: "Assets", url: "/assets", icon: Server, show: true },
-          { title: "Evidence", url: "/evidence", icon: FileText, show: true },
-          { title: "Knowledge Base", url: "/kb", icon: BookOpen, show: true },
-          { title: "Reports", url: "/reports", icon: ClipboardList, show: true },
-          { title: "IT Ops Console", url: "/itops", icon: Terminal, show: true },
-          { title: "Mobile View", url: "/m", icon: Smartphone, show: true },
-        ].filter((item) => item.show);
-
-  const licenseNavItems = isPaused ? [] : [
-    { title: "Licenses", url: "/licenses", icon: Key, show: isAdminOrOwner },
-    { title: "Developer", url: "/licenses/developer", icon: Code, show: isAdminOrOwner },
-  ].filter((item) => item.show);
-
-  const intakeNavItems = isPaused ? [] : isClient ? [] : [
-    { title: "Secure Intake", url: "/secure-intake", icon: Upload, show: true },
-    { title: "Spaces", url: "/secure-intake/spaces", icon: FileText, show: true },
-    { title: "Requests", url: "/secure-intake/requests", icon: Upload, show: true },
-    { title: "Files", url: "/secure-intake/files", icon: FileText, show: true },
-    { title: "Audit", url: "/secure-intake/audit", icon: Shield, show: isAdminOrOwner },
-    { title: "Policies", url: "/secure-intake/policies", icon: ShieldCheck, show: isAdminOrOwner },
-    { title: "Storage", url: "/secure-intake/storage", icon: Server, show: isAdminOrOwner },
-  ].filter((item) => item.show);
-
-  const adminNavItems = isPaused
-    ? [
-        { title: "Billing", url: "/billing", icon: CreditCard, show: isAdminOrOwner },
-      ].filter((item) => item.show)
-    : [
-        { title: "Invoices", url: "/invoices", icon: Receipt, show: isAdminOrOwner },
-        { title: "Billing Settings", url: "/billing-settings", icon: Wrench, show: isAdminOrOwner },
-        { title: "Recurring Tickets", url: "/recurring-tickets", icon: Repeat, show: isAdminOrOwner },
-        { title: "Status", url: "/status-admin", icon: Activity, show: isAdminOrOwner },
-        { title: "Webhooks", url: "/webhooks", icon: Webhook, show: isAdminOrOwner },
-        { title: "Team", url: "/team", icon: Building2, show: isAdminOrOwner },
-        { title: "Client Access", url: "/client-access", icon: KeyRound, show: isAdminOrOwner },
-        { title: "Audit Log", url: "/audit", icon: Shield, show: isAdminOrOwner },
-        { title: "API Tokens", url: "/api-tokens", icon: Key, show: isAdminOrOwner },
-        { title: "Billing", url: "/billing", icon: CreditCard, show: isAdminOrOwner },
-        { title: "Settings", url: "/settings", icon: Settings, show: !isClient },
-      ].filter((item) => item.show);
+  const sections = getSidebarSections({
+    role: role as "OWNER" | "ADMIN" | "TECH" | "CLIENT",
+    isSystemAdmin,
+    isPaused,
+    features: entitlements?.snapshot?.features,
+  });
 
   const initials = user
     ? `${(user.firstName || "")[0] || ""}${(user.lastName || "")[0] || ""}`
     : "?";
 
   return (
-    <Sidebar>
-      <SidebarHeader className="p-4">
+    <Sidebar className="border-sidebar-border bg-sidebar/95">
+      <SidebarHeader className="p-4 border-b border-sidebar-border/70">
         <div className="flex items-center justify-between gap-2">
           <Link href="/">
             <div className="flex items-center gap-2 cursor-pointer">
@@ -150,168 +145,75 @@ export function AppSidebar({ role, isSystemAdmin = false, isPaused = false }: Ap
                   Tech Deck
                 </h2>
                 <p className="text-xs text-muted-foreground leading-none mt-0.5">
-                  MSP Platform
+                  MSP Ops Console
                 </p>
               </div>
             </div>
           </Link>
           <PlanBadge canManage={isAdminOrOwner} />
         </div>
+        <div className="mt-3 flex items-center justify-between gap-2 rounded-md border border-sidebar-border/70 bg-sidebar-accent/30 px-2 py-1.5">
+          <span className="text-[11px] uppercase tracking-[0.12em] text-sidebar-foreground/60">
+            OperatorOS
+          </span>
+          <Badge variant={isPaused ? "destructive" : "outline"} className="text-[10px]">
+            {isPaused ? "Action needed" : "Managed"}
+          </Badge>
+        </div>
       </SidebarHeader>
-      <SidebarContent>
-        {portalNavItems.length > 0 && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Client Portal</SidebarGroupLabel>
+      <SidebarContent className="gap-1 py-2">
+        {sections.map((section) => (
+          <SidebarGroup key={section.id} className="py-1.5">
+            <SidebarGroupLabel className="h-6 text-[11px] uppercase tracking-[0.12em] text-sidebar-foreground/50">
+              {section.label}
+            </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {portalNavItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={
-                        item.url === "/portal"
-                          ? location === "/portal"
-                          : location.startsWith(item.url)
-                      }
-                    >
-                      <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>
-                        <item.icon className="w-4 h-4" />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+                {section.items.map((item) => {
+                  const Icon = iconMap[item.icon];
+                  const active = routeMatches(location, item.href, item.exact);
+
+                  return (
+                    <SidebarMenuItem key={`${section.id}-${item.title}`}>
+                      {item.locked ? (
+                        <SidebarMenuButton
+                          disabled
+                          isActive={false}
+                          className="text-sidebar-foreground/45"
+                          title={`${item.title} is managed by OperatorOS`}
+                          data-testid={`${navTestId(item.title)}-locked`}
+                        >
+                          <Icon className="w-4 h-4" />
+                          <span>{item.title}</span>
+                          <Lock className="ml-auto w-3 h-3" aria-label="Locked by OperatorOS" />
+                        </SidebarMenuButton>
+                      ) : (
+                        <SidebarMenuButton
+                          asChild
+                          isActive={active}
+                          tooltip={item.title}
+                          className={active ? "bg-sidebar-accent/90" : ""}
+                        >
+                          <Link href={item.href} data-testid={navTestId(item.title)}>
+                            <Icon className="w-4 h-4" />
+                            <span>{item.title}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      )}
+                    </SidebarMenuItem>
+                  );
+                })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
-        )}
-        {mainNavItems.length > 0 && (
-        <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {mainNavItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={
-                      item.url === "/"
-                        ? location === "/"
-                        : location.startsWith(item.url)
-                    }
-                  >
-                    <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>
-                      <item.icon className="w-4 h-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        )}
-        {licenseNavItems.length > 0 && (
-          <SidebarGroup>
-            <SidebarGroupLabel>License Server</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {licenseNavItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={
-                        item.url === "/licenses"
-                          ? location === "/licenses"
-                          : location.startsWith(item.url)
-                      }
-                    >
-                      <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>
-                        <item.icon className="w-4 h-4" />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
-        {intakeNavItems.length > 0 && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Secure Intake</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {intakeNavItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={
-                        item.url === "/secure-intake"
-                          ? location === "/secure-intake"
-                          : location.startsWith(item.url)
-                      }
-                    >
-                      <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>
-                        <item.icon className="w-4 h-4" />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
-        {adminNavItems.length > 0 && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Administration</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {adminNavItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={location.startsWith(item.url)}
-                    >
-                      <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}>
-                        <item.icon className="w-4 h-4" />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
-        {isSystemAdmin && (
-          <SidebarGroup>
-            <SidebarGroupLabel>System</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location.startsWith("/system-admin")}
-                  >
-                    <Link href="/system-admin" data-testid="nav-system-admin">
-                      <ShieldCheck className="w-4 h-4" />
-                      <span>Admin Panel</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
+        ))}
       </SidebarContent>
-      <SidebarFooter className="p-2">
+      <SidebarFooter className="p-2 border-t border-sidebar-border/70">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
-              className="w-full justify-start gap-2 px-2"
+              className="w-full justify-start gap-2 px-2 hover:bg-sidebar-accent"
               data-testid="button-user-menu"
             >
               <Avatar className="w-7 h-7">

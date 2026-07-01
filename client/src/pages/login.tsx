@@ -11,7 +11,7 @@ import logoImage from "@assets/ShotgunNinjaVaulticon_1770412982737.png";
 
 const OPERATOROS_URL =
   (import.meta.env.VITE_OPERATOROS_BASE_URL as string | undefined) ||
-  "/";
+  "https://operatoros.net";
 
 export default function LoginPage() {
   const [, setLocation] = useLocation();
@@ -150,7 +150,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
-      <Card className="w-full max-w-sm">
+      <Card className="command-surface w-full max-w-sm">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-2">
             <img src={logoImage} alt="Tech Deck" className="w-10 h-10 rounded-md object-cover" />

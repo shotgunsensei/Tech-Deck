@@ -6,8 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Shield, Building2, ArrowRight } from "lucide-react";
+import { Shield, Building2, ArrowRight, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+const OPERATOROS_URL =
+  (import.meta.env.VITE_OPERATOROS_BASE_URL as string | undefined) ||
+  "https://operatoros.net";
 
 export default function OnboardingPage() {
   const [orgName, setOrgName] = useState("");
@@ -48,17 +52,20 @@ export default function OnboardingPage() {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-6">
-      <Card className="w-full max-w-md">
+      <Card className="command-surface w-full max-w-md">
         <CardHeader className="text-center">
           <div className="mx-auto w-12 h-12 rounded-md bg-primary flex items-center justify-center mb-3">
             <Shield className="w-6 h-6 text-primary-foreground" />
           </div>
-          <CardTitle className="text-xl">Create your organization</CardTitle>
+          <CardTitle className="text-xl">Local workspace setup</CardTitle>
           <CardDescription>
-            Set up your workspace to start managing evidence securely.
+            Production tenants are created and entitled from OperatorOS. Use this only for local or legacy accounts.
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="mb-5 rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+            If you launched from OperatorOS and landed here, your tenant membership did not sync. Return to OperatorOS or contact your tenant admin instead of creating a new workspace.
+          </div>
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -103,6 +110,12 @@ export default function OnboardingPage() {
             >
               {createTenant.isPending ? "Creating..." : "Create organization"}
               <ArrowRight className="w-4 h-4 ml-1" />
+            </Button>
+            <Button asChild variant="outline" className="w-full" data-testid="button-return-operatoros">
+              <a href={OPERATOROS_URL} rel="noopener noreferrer">
+                <ExternalLink className="w-4 h-4 mr-1" />
+                Return to OperatorOS
+              </a>
             </Button>
           </form>
         </CardContent>

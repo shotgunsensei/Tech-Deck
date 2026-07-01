@@ -13,6 +13,8 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { PausedBanner } from "@/components/paused-banner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { Badge } from "@/components/ui/badge";
+import { Activity, Building2, ShieldCheck } from "lucide-react";
 
 import { LandingPage, OnboardingPage } from "@/modules/core";
 
@@ -184,9 +186,37 @@ function AuthenticatedApp() {
       <div className="flex h-screen w-full">
         <AppSidebar role={role} isSystemAdmin={isSystemAdmin} isPaused={isPaused} />
         <div className="flex flex-col flex-1 min-w-0">
-          <header className="flex items-center justify-between gap-4 p-2 border-b sticky top-0 z-50 bg-background/80 backdrop-blur-md">
-            <SidebarTrigger data-testid="button-sidebar-toggle" />
-            <ThemeToggle />
+          <header
+            className="glass-header flex min-h-14 items-center justify-between gap-4 px-3 py-2 sticky top-0 z-50"
+            data-testid="app-operations-bar"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <SidebarTrigger data-testid="button-sidebar-toggle" />
+              <div className="hidden sm:flex items-center gap-2 min-w-0">
+                <div className="flex h-8 w-8 items-center justify-center rounded-md border bg-background/60 text-primary">
+                  <Building2 className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold leading-none">
+                    {tenantInfo.tenant.name}
+                  </p>
+                  <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Activity className="h-3 w-3 text-emerald-500" />
+                    Tech Deck command workspace
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="hidden md:inline-flex gap-1">
+                <ShieldCheck className="h-3 w-3" />
+                {isPaused ? "OperatorOS attention required" : "OperatorOS managed"}
+              </Badge>
+              <Badge variant="secondary" className="hidden sm:inline-flex">
+                {role}
+              </Badge>
+              <ThemeToggle />
+            </div>
           </header>
           <PausedBanner />
           <main className="flex-1 overflow-auto">

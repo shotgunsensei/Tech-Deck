@@ -35,7 +35,7 @@ import logoImage from "@assets/ShotgunNinjaVaulticon_1770412982737.png";
 
 const OPERATOROS_URL =
   (import.meta.env.VITE_OPERATOROS_BASE_URL as string | undefined) ||
-  "/login";
+  "https://operatoros.net";
 
 const REQUEST_ACCESS_URL =
   (import.meta.env.VITE_OPERATOROS_REQUEST_ACCESS_URL as string | undefined) ||
@@ -287,9 +287,12 @@ export default function LandingPage() {
           <div className="relative z-10 flex flex-col min-h-[480px] sm:min-h-[540px] px-6">
             <div className="flex-1" />
             <div className="max-w-3xl mx-auto text-center pb-10 sm:pb-14">
-              <h1 className="sr-only">
-                Tech Deck — IT operations cockpit for MSPs and senior technical teams
+              <h1 className="text-4xl sm:text-5xl font-bold tracking-normal text-white drop-shadow-lg">
+                Tech Deck
               </h1>
+              <p className="mt-3 mb-6 text-base sm:text-lg text-white/78">
+                MSP operations cockpit for ticketing, evidence, automation, secure intake, and audit-ready IT work.
+              </p>
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <Button size="lg" asChild data-testid="button-get-started">
                   <a href={OPERATOROS_URL}>

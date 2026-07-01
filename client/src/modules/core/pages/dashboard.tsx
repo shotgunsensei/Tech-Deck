@@ -13,13 +13,15 @@ import {
   TicketIcon,
   CalendarDays,
   Receipt,
-  DollarSign,
+  ShieldCheck,
+  Terminal,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/empty-state";
 import { useState } from "react";
 import type { DashboardStats, TenantWithMember, EvidenceWithRelations } from "@/lib/types";
 import type { Client } from "@shared/schema";
@@ -31,30 +33,54 @@ function formatFileSize(bytes: number): string {
   return (bytes / 1048576).toFixed(1) + " MB";
 }
 
+interface EntitlementsResponse {
+  snapshot: {
+    accessLevel?: string;
+    planSlug?: string;
+    subscriptionStatus?: string;
+    enabled?: boolean;
+    syncedAt?: string;
+  } | null;
+  managedBy?: "operatoros";
+  lastSyncAt?: string | null;
+}
+
 function StatCard({
   title,
   value,
   max,
   icon: Icon,
   href,
+  tone = "default",
+  helper,
 }: {
   title: string;
-  value: number;
+  value: number | string;
   max?: number;
   icon: any;
   href: string;
+  tone?: "default" | "risk" | "success";
+  helper?: string;
 }) {
-  const nearLimit = max !== undefined && value >= max * 0.8;
-  const atLimit = max !== undefined && value >= max;
+  const numericValue = typeof value === "number" ? value : 0;
+  const nearLimit = max !== undefined && numericValue >= max * 0.8;
+  const atLimit = max !== undefined && numericValue >= max;
+  const toneClass =
+    tone === "risk"
+      ? "text-amber-500 bg-amber-500/10"
+      : tone === "success"
+        ? "text-emerald-500 bg-emerald-500/10"
+        : "text-primary bg-primary/10";
 
   return (
     <Link href={href}>
-      <Card className="hover-elevate cursor-pointer">
+      <Card className="metric-card hover-elevate cursor-pointer">
         <CardContent className="p-4">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-xs text-muted-foreground font-medium">{title}</p>
               <p className="text-2xl font-bold mt-1">{value}</p>
+              {helper && <p className="text-xs text-muted-foreground mt-1">{helper}</p>}
               {max !== undefined && (
                 <div className="flex items-center gap-1 mt-1">
                   {atLimit ? (
@@ -65,7 +91,7 @@ function StatCard({
                   ) : nearLimit ? (
                     <Badge variant="secondary" className="text-xs">
                       <AlertTriangle className="w-3 h-3 mr-1" />
-                      {max - value} remaining
+                      {max - numericValue} remaining
                     </Badge>
                   ) : (
                     <span className="text-xs text-muted-foreground">of {max}</span>
@@ -73,13 +99,71 @@ function StatCard({
                 </div>
               )}
             </div>
-            <div className="w-9 h-9 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <Icon className="w-4 h-4 text-primary" />
+            <div className={`w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0 ${toneClass}`}>
+              <Icon className="w-4 h-4" />
             </div>
           </div>
         </CardContent>
       </Card>
     </Link>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="p-6 space-y-6">
+      <div className="space-y-2">
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-4 w-96 max-w-full" />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4">
+        {[1, 2, 3, 4, 5, 6].map((i) => (
+          <Skeleton key={i} className="h-32 rounded-md" />
+        ))}
+      </div>
+      <div className="grid lg:grid-cols-[1fr_360px] gap-4">
+        <Skeleton className="h-72 rounded-md" />
+        <Skeleton className="h-72 rounded-md" />
+      </div>
+    </div>
+  );
+}
+
+function OperatorStatusCard({ data }: { data?: EntitlementsResponse }) {
+  const snapshot = data?.snapshot;
+  const status = snapshot?.subscriptionStatus || "unsynced";
+  const enabled = snapshot?.enabled !== false;
+  const blocking = ["past_due", "unpaid", "canceled", "unsynced"].includes(status) || !enabled;
+  const label = snapshot?.accessLevel || snapshot?.planSlug || "OperatorOS";
+
+  return (
+    <Card className="metric-card">
+      <CardContent className="p-4 h-full">
+        <div className="flex h-full flex-col justify-between gap-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs text-muted-foreground font-medium">
+                OperatorOS Entitlement Status
+              </p>
+              <p className="text-xl font-bold mt-1 capitalize" data-testid="text-operatoros-status">
+                {status.replace("_", " ")}
+              </p>
+            </div>
+            <div className={`w-9 h-9 rounded-md flex items-center justify-center ${blocking ? "bg-amber-500/10 text-amber-500" : "bg-emerald-500/10 text-emerald-500"}`}>
+              <ShieldCheck className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Badge variant={blocking ? "outline" : "secondary"} className="status-chip">
+              {label}
+            </Badge>
+            <p className="text-xs text-muted-foreground">
+              Access, plans, and module availability are managed by OperatorOS.
+            </p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -238,23 +322,19 @@ export default function DashboardPage() {
   const isClient = role === "CLIENT";
   const roleResolved = !!tenantInfo;
 
-  const { data: stats, isLoading } = useQuery<DashboardStats>({
+  const { data: stats, isLoading, error, refetch } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard"],
     enabled: roleResolved && !isClient,
   });
 
+  const { data: entitlements } = useQuery<EntitlementsResponse>({
+    queryKey: ["/api/me/entitlements"],
+    enabled: roleResolved && !isClient,
+    staleTime: 60_000,
+  });
+
   if (tenantLoading || !roleResolved) {
-    return (
-      <div className="p-6 space-y-6">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-28 rounded-md" />
-          ))}
-        </div>
-        <Skeleton className="h-10 rounded-md" />
-        <Skeleton className="h-64 rounded-md" />
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   if (isClient) {
@@ -262,57 +342,78 @@ export default function DashboardPage() {
   }
 
   if (isLoading) {
+    return <DashboardSkeleton />;
+  }
+
+  if (error) {
     return (
-      <div className="p-6 space-y-6">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-28 rounded-md" />
-          ))}
-        </div>
-        <Skeleton className="h-10 rounded-md" />
-        <Skeleton className="h-64 rounded-md" />
+      <div className="p-6">
+        <Card className="command-surface max-w-2xl">
+          <CardContent className="p-8">
+            <EmptyState
+              icon={AlertTriangle}
+              title="Dashboard data did not load"
+              description="The workspace shell is available, but the dashboard summary API returned an error. Retry, or check the server logs for /api/dashboard."
+              action={{
+                label: "Retry",
+                onClick: () => {
+                  void refetch();
+                },
+                variant: "outline",
+                testId: "button-dashboard-retry",
+              }}
+            />
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="subtle-grid-bg min-h-full p-6 space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight" data-testid="text-dashboard-title">
-            Dashboard
+          <Badge variant="outline" className="mb-2 status-chip">
+            Command Center
+          </Badge>
+          <h1 className="text-3xl font-bold tracking-tight" data-testid="text-dashboard-title">
+            Tech Deck Operations
           </h1>
           <p className="text-sm text-muted-foreground">
-            Overview of your workspace.
+            Live MSP workspace view for tickets, evidence, clients, and OperatorOS-managed access.
           </p>
         </div>
-        <Button asChild data-testid="button-upload-evidence">
-          <Link href="/evidence/upload">
-            <Upload className="w-4 h-4 mr-1" />
-            Upload Evidence
-          </Link>
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" asChild data-testid="button-view-tickets">
+            <Link href="/tickets">
+              <TicketIcon className="w-4 h-4 mr-1" />
+              View Tickets
+            </Link>
+          </Button>
+          <Button asChild data-testid="button-upload-evidence">
+            <Link href="/evidence/upload">
+              <Upload className="w-4 h-4 mr-1" />
+              Upload Evidence
+            </Link>
+          </Button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4">
         <StatCard
           title="Open Tickets"
           value={stats?.openTickets || 0}
           icon={TicketIcon}
           href="/tickets"
+          helper="Active queue"
         />
         <StatCard
-          title="Upcoming Appointments"
-          value={stats?.upcomingAppointments || 0}
-          icon={CalendarDays}
-          href="/calendar"
-        />
-        <StatCard
-          title="Clients"
-          value={stats?.totalClients || 0}
-          max={stats?.maxClients}
-          icon={Users}
-          href="/clients"
+          title="SLA Risk"
+          value={stats?.overdueTickets || 0}
+          icon={AlertTriangle}
+          href="/tickets"
+          tone={(stats?.overdueTickets || 0) > 0 ? "risk" : "success"}
+          helper={(stats?.overdueTickets || 0) > 0 ? "Overdue tickets" : "No overdue tickets"}
         />
         <StatCard
           title="Evidence Items"
@@ -320,14 +421,31 @@ export default function DashboardPage() {
           max={stats?.maxEvidence}
           icon={FileText}
           href="/evidence"
+          helper="Chain-of-custody records"
         />
+        <StatCard
+          title="Active Clients"
+          value={stats?.totalClients || 0}
+          max={stats?.maxClients}
+          icon={Users}
+          href="/clients"
+          helper="Tenant-scoped accounts"
+        />
+        <StatCard
+          title="Recent Activity"
+          value={stats?.recentEvidence?.length || 0}
+          icon={Clock}
+          href="/evidence"
+          helper="Latest evidence uploads"
+        />
+        <OperatorStatusCard data={entitlements} />
       </div>
 
       {(stats?.overdueTickets || 0) > 0 && (
-        <Card className="border-destructive/50 bg-destructive/5">
+        <Card className="border-amber-500/50 bg-amber-500/5">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0" />
+              <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
               <div>
                 <p className="text-sm font-medium">
                   {stats!.overdueTickets} overdue ticket{stats!.overdueTickets > 1 ? "s" : ""} need attention
@@ -342,7 +460,13 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          title="Upcoming Appointments"
+          value={stats?.upcomingAppointments || 0}
+          icon={CalendarDays}
+          href="/calendar"
+        />
         <StatCard
           title="Sites"
           value={stats?.totalSites || 0}
@@ -355,7 +479,7 @@ export default function DashboardPage() {
           icon={Server}
           href="/assets"
         />
-        <Card className="hover-elevate cursor-pointer" onClick={() => window.location.href = "/invoices"}>
+        <Card className="metric-card hover-elevate cursor-pointer" onClick={() => window.location.href = "/invoices"}>
           <CardContent className="p-4">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -368,7 +492,7 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
-        <Card className="hover-elevate cursor-pointer" onClick={() => window.location.href = "/time"}>
+        <Card className="metric-card hover-elevate cursor-pointer" onClick={() => window.location.href = "/time"}>
           <CardContent className="p-4">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -383,7 +507,7 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <div className="relative">
+      <div className="relative max-w-3xl">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <form
           onSubmit={(e) => {
@@ -404,9 +528,10 @@ export default function DashboardPage() {
         </form>
       </div>
 
-      <Card>
+      <div className="grid lg:grid-cols-[1fr_360px] gap-4 items-start">
+      <Card className="command-surface">
         <CardHeader className="flex flex-row items-center justify-between gap-4 pb-3">
-          <CardTitle className="text-base font-semibold">Recent uploads</CardTitle>
+          <CardTitle className="text-base font-semibold">Recent Activity</CardTitle>
           <Button variant="ghost" size="sm" asChild>
             <Link href="/evidence">
               View all
@@ -416,17 +541,17 @@ export default function DashboardPage() {
         </CardHeader>
         <CardContent>
           {!stats?.recentEvidence?.length ? (
-            <div className="text-center py-10 text-muted-foreground">
-              <FileText className="w-10 h-10 mx-auto mb-3 opacity-40" />
-              <p className="text-sm font-medium">No evidence uploaded yet</p>
-              <p className="text-xs mt-1">Upload your first file to get started.</p>
-              <Button asChild variant="outline" size="sm" className="mt-4">
-                <Link href="/evidence/upload">
-                  <Upload className="w-4 h-4 mr-1" />
-                  Upload Evidence
-                </Link>
-              </Button>
-            </div>
+            <EmptyState
+              icon={FileText}
+              title="No evidence uploaded yet"
+              description="Start a chain-of-custody trail by uploading screenshots, logs, PDFs, or diagnostics for a client."
+              action={{
+                label: "Upload Evidence",
+                href: "/evidence/upload",
+                variant: "outline",
+                testId: "button-empty-upload-evidence",
+              }}
+            />
           ) : (
             <div className="space-y-2">
               {stats.recentEvidence.map((item) => (
@@ -460,6 +585,36 @@ export default function DashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      <Card className="command-surface">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold">Next Actions</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Button asChild variant="outline" className="w-full justify-start" data-testid="button-next-itops">
+            <Link href="/itops">
+              <Terminal className="w-4 h-4 mr-1" />
+              Open IT Ops Console
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="w-full justify-start" data-testid="button-next-secure-intake">
+            <Link href="/secure-intake">
+              <Upload className="w-4 h-4 mr-1" />
+              Review Secure Intake
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="w-full justify-start" data-testid="button-next-operatoros">
+            <Link href="/billing">
+              <ShieldCheck className="w-4 h-4 mr-1" />
+              Check OperatorOS Snapshot
+            </Link>
+          </Button>
+          <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+            Tech Deck enforces the synced OperatorOS snapshot locally. Billing and module changes stay in OperatorOS.
+          </div>
+        </CardContent>
+      </Card>
+      </div>
     </div>
   );
 }

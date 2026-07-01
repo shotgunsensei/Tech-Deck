@@ -13,6 +13,10 @@ const REQUEST_ACCESS_URL =
   (import.meta.env.VITE_OPERATOROS_REQUEST_ACCESS_URL as string | undefined) ||
   "mailto:hello@techdeck.app?subject=Tech%20Deck%20access";
 
+const OPERATOROS_URL =
+  (import.meta.env.VITE_OPERATOROS_BASE_URL as string | undefined) ||
+  "https://operatoros.net";
+
 function PasswordStrength({ password }: { password: string }) {
   const checks = [
     { label: "8+ characters", met: password.length >= 8 },
@@ -101,7 +105,7 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4 py-8">
-      <Card className="w-full max-w-sm">
+      <Card className="command-surface w-full max-w-sm">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-2">
             <img src={logoImage} alt="Tech Deck" className="w-10 h-10 rounded-md object-cover" />
@@ -201,8 +205,14 @@ export default function RegisterPage() {
                 Request access
               </a>
               {" or "}
+              <a href={OPERATOROS_URL} className="text-primary hover:underline" data-testid="link-operatoros">
+                launch from OperatorOS
+              </a>
+              {"."}
+            </p>
+            <p className="text-center text-xs text-muted-foreground">
               <Link href="/login" className="text-primary hover:underline" data-testid="link-login">
-                Sign in
+                Local admin sign in
               </Link>
             </p>
           </form>
