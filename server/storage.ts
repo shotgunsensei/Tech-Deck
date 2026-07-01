@@ -941,6 +941,8 @@ export class DatabaseStorage implements IStorage {
       totalAssets: assetCount.count,
       totalEvidence: evidenceCount.count,
       totalSites: siteCount.count,
+      // Legacy compatibility fields only. OperatorOS entitlement snapshots
+      // own enforceable limits.
       maxClients: tenant?.maxClients || 5,
       maxEvidence: tenant?.maxEvidence || 50,
       recentEvidence,

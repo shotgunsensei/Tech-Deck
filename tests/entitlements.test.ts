@@ -4,8 +4,6 @@ import {
   parseSnapshot,
   mapOperatorOsRole,
   isBlockingStatus,
-  defaultFeaturesFor,
-  defaultLimitsFor,
 } from "../server/auth/entitlements";
 
 vi.hoisted(() => {
@@ -13,12 +11,12 @@ vi.hoisted(() => {
 });
 
 describe("entitlements / buildSnapshot", () => {
-  it("fills features and limits from access level when claims omit them", () => {
+  it("does not infer features or limits from local plan names when claims omit them", () => {
     const snap = buildSnapshot({ planSlug: "pro", accessLevel: "pro" });
     expect(snap.schemaVersion).toBe(1);
     expect(snap.accessLevel).toBe("pro");
-    expect(snap.features).toEqual(defaultFeaturesFor("pro"));
-    expect(snap.limits.usersMax).toBe(defaultLimitsFor("pro").usersMax);
+    expect(snap.features).toEqual([]);
+    expect(snap.limits).toEqual({});
     expect(snap.enabled).toBe(true);
     expect(snap.subscriptionStatus).toBe("active");
   });
@@ -28,7 +26,7 @@ describe("entitlements / buildSnapshot", () => {
     expect(snap.subscriptionStatus).toBe("active");
   });
 
-  it("preserves explicit features and merges custom limits over defaults", () => {
+  it("preserves explicit OperatorOS features and limits without local plan merging", () => {
     const snap = buildSnapshot({
       planSlug: "pro",
       features: ["API", "reports"],
@@ -36,7 +34,7 @@ describe("entitlements / buildSnapshot", () => {
     });
     expect(snap.features).toEqual(["api", "reports"]);
     expect(snap.limits.usersMax).toBe(99);
-    expect(snap.limits.storageGb).toBe(defaultLimitsFor("pro").storageGb);
+    expect(snap.limits.storageGb).toBeUndefined();
   });
 
   it("honours enabled=false", () => {
@@ -47,7 +45,8 @@ describe("entitlements / buildSnapshot", () => {
   it("falls back to basic when no plan/access supplied", () => {
     const snap = buildSnapshot({});
     expect(snap.accessLevel).toBe("basic");
-    expect(snap.features).toEqual(defaultFeaturesFor("basic"));
+    expect(snap.features).toEqual([]);
+    expect(snap.limits).toEqual({});
   });
 });
 
@@ -115,30 +114,49 @@ describe("entitlements / isBlockingStatus", () => {
   );
 });
 
-describe("entitlements / requireNotPaused legacy fallback", () => {
-  it("blocks when no snapshot but legacy subscription status is past_due", async () => {
-    const { storage } = await import("../server/storage");
-    const spy = vi.spyOn(storage, "getTenantSubscription" as any)
-      .mockResolvedValue({ status: "past_due", pausedAt: null } as any);
+describe("entitlements / requireNotPaused OperatorOS authority", () => {
+  it("blocks OperatorOS-managed users when no entitlement snapshot is present", async () => {
     const { requireNotPaused } = await import("../server/core/middleware/requireNotPaused");
     const mw = requireNotPaused();
     const calls: any[] = [];
     const res: any = { status: (s: number) => ({ json: (b: any) => { calls.push({ s, b }); return res; } }) };
-    await mw({ user: { profile: {} }, tenantCtx: { tenantId: "t-legacy-1" } }, res, () => calls.push({ next: true }));
+    await mw({ user: { profile: { operatorosUserId: "os-user-1" } }, tenantCtx: { tenantId: "t-os-1" } }, res, () => calls.push({ next: true }));
     expect(calls[0].s).toBe(402);
-    expect(calls[0].b.error).toBe("subscription_inactive");
-    spy.mockRestore();
+    expect(calls[0].b.error).toBe("entitlement_snapshot_missing");
   });
 
-  it("allows through when no snapshot and no legacy sub row", async () => {
-    const { storage } = await import("../server/storage");
-    const spy = vi.spyOn(storage, "getTenantSubscription" as any).mockResolvedValue(null);
+  it.each(["active", "trialing"])("allows %s snapshots", async (subscriptionStatus) => {
     const { requireNotPaused } = await import("../server/core/middleware/requireNotPaused");
     const mw = requireNotPaused();
     let nextCalled = false;
-    await mw({ user: { profile: {} }, tenantCtx: { tenantId: "t-legacy-2" } }, {} as any, () => { nextCalled = true; });
+    await mw({
+      user: {
+        profile: {
+          entitlementSnapshotJson: buildSnapshot({ subscriptionStatus, enabled: true }),
+          operatorosUserId: "os-user-2",
+        },
+      },
+      tenantCtx: { tenantId: "t-os-2" },
+    }, {} as any, () => { nextCalled = true; });
     expect(nextCalled).toBe(true);
-    spy.mockRestore();
+  });
+
+  it.each(["past_due", "unpaid", "canceled"])("blocks %s snapshots", async (subscriptionStatus) => {
+    const { requireNotPaused } = await import("../server/core/middleware/requireNotPaused");
+    const mw = requireNotPaused();
+    const calls: any[] = [];
+    const res: any = { status: (s: number) => ({ json: (b: any) => { calls.push({ s, b }); return res; } }) };
+    await mw({
+      user: {
+        profile: {
+          entitlementSnapshotJson: buildSnapshot({ subscriptionStatus }),
+          operatorosUserId: "os-user-3",
+        },
+      },
+      tenantCtx: { tenantId: "t-os-3" },
+    }, res, () => calls.push({ next: true }));
+    expect(calls[0].s).toBe(402);
+    expect(calls[0].b.error).toBe("subscription_inactive");
   });
 });
 

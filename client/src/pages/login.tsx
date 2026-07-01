@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation, Link } from "wouter";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,10 @@ import { Loader2, LogIn, Shield } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
 import { authFetch, clearCsrfToken } from "@/lib/csrf";
 import logoImage from "@assets/ShotgunNinjaVaulticon_1770412982737.png";
+
+const OPERATOROS_URL =
+  (import.meta.env.VITE_OPERATOROS_BASE_URL as string | undefined) ||
+  "/";
 
 export default function LoginPage() {
   const [, setLocation] = useLocation();
@@ -151,8 +155,8 @@ export default function LoginPage() {
           <div className="flex justify-center mb-2">
             <img src={logoImage} alt="Tech Deck" className="w-10 h-10 rounded-md object-cover" />
           </div>
-          <CardTitle className="text-xl" data-testid="text-login-title">Sign In</CardTitle>
-          <CardDescription>Enter your credentials to continue</CardDescription>
+          <CardTitle className="text-xl" data-testid="text-login-title">System Admin Sign In</CardTitle>
+          <CardDescription>Launch from OperatorOS unless you are using a local admin account</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
@@ -193,12 +197,9 @@ export default function LoginPage() {
               )}
               Sign In
             </Button>
-            <p className="text-center text-sm text-muted-foreground">
-              Don't have an account?{" "}
-              <Link href="/register" className="text-primary hover:underline" data-testid="link-register">
-                Create one
-              </Link>
-            </p>
+            <Button asChild variant="outline" className="w-full" data-testid="link-operatoros-launch">
+              <a href={OPERATOROS_URL}>Launch from OperatorOS</a>
+            </Button>
           </form>
         </CardContent>
       </Card>

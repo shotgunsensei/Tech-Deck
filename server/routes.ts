@@ -40,6 +40,8 @@ import { sql } from "drizzle-orm";
 declare const __APP_VERSION__: string;
 const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
 const isApiOnly = process.env.API_ONLY === "true";
+const legacyStripeAuditEnabled = process.env.ENABLE_LEGACY_STRIPE_WEBHOOK_AUDIT === "true";
+const legacyBillingSeedEnabled = process.env.ENABLE_LEGACY_BILLING_SEED === "true";
 
 async function initStripeSync(): Promise<void> {
   const databaseUrl = process.env.DATABASE_URL;
@@ -137,15 +139,25 @@ export async function registerRoutes(
 
   registerApiV1Routes(app);
 
-  registerStripeWebhook(app);
+  if (legacyStripeAuditEnabled) {
+    registerStripeWebhook(app);
+  } else {
+    console.log("[stripe] Legacy Stripe webhook audit route disabled. Set ENABLE_LEGACY_STRIPE_WEBHOOK_AUDIT=true to register it.");
+  }
 
-  await seedSubscriptionPlans().catch((err) =>
-    console.error("[billing] Failed to seed subscription plans:", err)
-  );
+  if (legacyBillingSeedEnabled) {
+    await seedSubscriptionPlans().catch((err) =>
+      console.error("[billing] Failed to seed subscription plans:", err)
+    );
+  } else {
+    console.log("[billing] Legacy local subscription plan seed disabled. OperatorOS owns plan catalog.");
+  }
 
-  await initStripeSync().catch((err) =>
-    console.error("[stripe] Stripe sync initialization failed:", err)
-  );
+  if (legacyStripeAuditEnabled) {
+    await initStripeSync().catch((err) =>
+      console.error("[stripe] Stripe sync initialization failed:", err)
+    );
+  }
 
   await ensureProductionSetup().catch((err) =>
     console.error("[setup] Production setup failed:", err)

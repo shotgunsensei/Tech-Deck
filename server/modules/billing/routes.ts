@@ -8,13 +8,14 @@ import { parseSnapshot } from "../../auth/entitlements";
  * entitlements. Tech Deck no longer owns checkout, the customer portal,
  * or plan switching — those endpoints now return 410 Gone with a clear
  * pointer to OperatorOS billing. We keep read-only endpoints so the UI
- * can display the current snapshot, and we keep the Stripe webhook
- * registered for legacy audit purposes (it records events but no longer
- * pauses tenants).
+ * can display the current snapshot. The legacy Stripe webhook is registered
+ * only when ENABLE_LEGACY_STRIPE_WEBHOOK_AUDIT=true, and then it records
+ * audit events without changing access.
  */
 function operatorosBillingUrl(): string {
-  return process.env.OPERATOROS_BILLING_URL
-    || `${(process.env.OPERATOROS_BASE_URL || "").replace(/\/$/, "")}/billing`;
+  if (process.env.OPERATOROS_BILLING_URL) return process.env.OPERATOROS_BILLING_URL;
+  if (process.env.OPERATOROS_BASE_URL) return `${process.env.OPERATOROS_BASE_URL.replace(/\/$/, "")}/billing`;
+  return "https://operatoros.app/billing";
 }
 
 const GONE_BODY = {

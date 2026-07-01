@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ExternalLink, FileText, HardDrive, Webhook, Users } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 interface EntitlementSnapshot {
   schemaVersion: number;
@@ -41,17 +42,20 @@ interface SubscriptionResponse {
   } | null;
 }
 
-import type { LucideIcon } from "lucide-react";
-
 function buildOperatorOsBillingUrl(base: string | undefined): string {
-  const root = base || "https://operatoros.app/billing";
+  const root =
+    base ||
+    (import.meta.env.VITE_OPERATOROS_BILLING_URL as string | undefined) ||
+    (import.meta.env.VITE_OPERATOROS_BASE_URL as string | undefined) ||
+    "/billing";
   const sep = root.includes("?") ? "&" : "?";
   return `${root}${sep}return_to=techdeck`;
 }
 function UsageBar({ label, icon: Icon, current, max, unit = "" }: {
-  label: string; icon: LucideIcon; current: number; max: number; unit?: string;
+  label: string; icon: LucideIcon; current?: number; max: number; unit?: string;
 }) {
-  const pct = max > 0 ? Math.min(100, (current / max) * 100) : 0;
+  const hasCurrent = typeof current === "number";
+  const pct = hasCurrent && max > 0 ? Math.min(100, (current / max) * 100) : 0;
   const isWarn = pct >= 80;
   const isOver = pct >= 100;
   return (
@@ -62,10 +66,10 @@ function UsageBar({ label, icon: Icon, current, max, unit = "" }: {
           {label}
         </span>
         <span className={isOver ? "text-destructive font-medium" : isWarn ? "text-amber-600 font-medium" : "text-muted-foreground"}>
-          {current}{unit} / {max}{unit}
+          {hasCurrent ? `${current}${unit} / ${max}${unit}` : `Limit: ${max}${unit}`}
         </span>
       </div>
-      {max > 0 && <Progress value={pct} className="h-1.5" />}
+      {hasCurrent && max > 0 && <Progress value={pct} className="h-1.5" />}
     </div>
   );
 }
@@ -139,7 +143,6 @@ export default function BillingPage() {
               <UsageBar
                 label="Users"
                 icon={Users}
-                current={0}
                 max={snap.limits.usersMax || 0}
               />
               <UsageBar

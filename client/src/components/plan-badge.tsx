@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
-import { Sparkles } from "lucide-react";
 import { Link } from "wouter";
 
 interface EntitlementsResponse {
@@ -30,11 +29,9 @@ export function PlanBadge({ canManage }: { canManage: boolean }) {
 
   const code = (data?.snapshot?.accessLevel || data?.snapshot?.planSlug || "basic").toLowerCase();
   const meta = PLAN_VARIANTS[code] || { label: code, variant: "outline" as const };
-  const showUpgrade = code === "basic" || code === "solo";
 
   const badge = (
     <Badge variant={meta.variant} className="gap-1 text-xs" data-testid={`plan-badge-${code}`}>
-      {showUpgrade && <Sparkles className="w-3 h-3" />}
       {meta.label}
     </Badge>
   );

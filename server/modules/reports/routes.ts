@@ -65,6 +65,7 @@ export function registerReportRoutes(app: Express) {
     "/api/reports/jobs",
     isAuthenticated,
     requireRole("OWNER", "ADMIN", "TECH"),
+    requireFeature("reports"),
     async (req: any, res) => {
       try {
         const { tenantId } = req.tenantCtx;
@@ -81,6 +82,7 @@ export function registerReportRoutes(app: Express) {
     "/api/reports/jobs/:id",
     isAuthenticated,
     requireRole("OWNER", "ADMIN", "TECH"),
+    requireFeature("reports"),
     async (req: any, res) => {
       try {
         const { tenantId } = req.tenantCtx;
@@ -100,6 +102,7 @@ export function registerReportRoutes(app: Express) {
     "/api/reports/jobs/:id/download",
     isAuthenticated,
     requireRole("OWNER", "ADMIN", "TECH"),
+    requireFeature("reports"),
     async (req: any, res) => {
       try {
         const { tenantId } = req.tenantCtx;

@@ -2,17 +2,30 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Building2,
   CreditCard,
-  AlertTriangle,
   Puzzle,
   Check,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Progress } from "@/components/ui/progress";
 import type { TenantWithMember } from "@/lib/types";
 import type { DashboardStats } from "@/lib/types";
 import type { ModuleDefinition } from "@shared/modules/types";
+
+interface EntitlementsResponse {
+  snapshot: {
+    accessLevel?: string;
+    subscriptionStatus?: string;
+    enabled?: boolean;
+    features?: string[];
+    limits?: Record<string, number>;
+  } | null;
+  lastSyncAt?: string | null;
+}
+
+function formatSnapshotValue(value: string | number | undefined | null) {
+  return value === undefined || value === null || value === "" ? "Not synced" : String(value);
+}
 
 export default function SettingsPage() {
   const { data: tenantInfo, isLoading: tenantLoading } = useQuery<TenantWithMember>({
@@ -24,8 +37,11 @@ export default function SettingsPage() {
   const { data: modules, isLoading: modulesLoading } = useQuery<ModuleDefinition[]>({
     queryKey: ["/api/modules"],
   });
+  const { data: entitlements, isLoading: entitlementsLoading } = useQuery<EntitlementsResponse>({
+    queryKey: ["/api/me/entitlements"],
+  });
 
-  if (tenantLoading || statsLoading || modulesLoading) {
+  if (tenantLoading || statsLoading || modulesLoading || entitlementsLoading) {
     return (
       <div className="p-6 space-y-4">
         <Skeleton className="h-10 w-48" />
@@ -37,6 +53,8 @@ export default function SettingsPage() {
   }
 
   const tenant = tenantInfo?.tenant;
+  const snapshot = entitlements?.snapshot;
+  const limits = snapshot?.limits || {};
 
   return (
     <div className="p-6 space-y-6 max-w-2xl">
@@ -45,7 +63,7 @@ export default function SettingsPage() {
           Settings
         </h1>
         <p className="text-sm text-muted-foreground">
-          Manage your organization settings, plan, and modules.
+          Review your organization settings, OperatorOS entitlements, and installed modules.
         </p>
       </div>
 
@@ -83,57 +101,52 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <CreditCard className="w-4 h-4 text-muted-foreground" />
-              <CardTitle className="text-base font-semibold">Plan & Usage</CardTitle>
+              <CardTitle className="text-base font-semibold">OperatorOS Entitlements</CardTitle>
             </div>
             <Badge variant="secondary" data-testid="text-plan-name">
-              {tenant?.plan || "free"} plan
+              {formatSnapshotValue(snapshot?.accessLevel)}
             </Badge>
           </div>
           <CardDescription>
-            Your current usage against plan limits.
+            Plan, billing state, feature access, and limits are synced from OperatorOS.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span>Clients</span>
-              <span className="text-muted-foreground">
-                {stats?.totalClients || 0} / {stats?.maxClients || 5}
-              </span>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-xs text-muted-foreground font-medium">Subscription Status</p>
+              <p className="mt-0.5">{formatSnapshotValue(snapshot?.subscriptionStatus)}</p>
             </div>
-            <Progress
-              value={
-                ((stats?.totalClients || 0) / (stats?.maxClients || 5)) * 100
-              }
-              className="h-2"
-            />
-            {stats && stats.totalClients >= (stats.maxClients || 5) && (
-              <div className="flex items-center gap-1 text-xs text-destructive">
-                <AlertTriangle className="w-3 h-3" />
-                Client limit reached. Upgrade to add more.
-              </div>
-            )}
+            <div>
+              <p className="text-xs text-muted-foreground font-medium">Tech Deck Access</p>
+              <p className="mt-0.5">{snapshot?.enabled === false ? "Disabled" : snapshot ? "Enabled" : "Not synced"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground font-medium">Users Limit</p>
+              <p className="mt-0.5">{formatSnapshotValue(limits.usersMax)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground font-medium">Storage Limit</p>
+              <p className="mt-0.5">{limits.storageGb === undefined ? "Not synced" : `${limits.storageGb} GB`}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground font-medium">Reports / Month</p>
+              <p className="mt-0.5">{formatSnapshotValue(limits.reportsPerMonth)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground font-medium">Last Sync</p>
+              <p className="mt-0.5">{entitlements?.lastSyncAt ? new Date(entitlements.lastSyncAt).toLocaleString() : "Not synced"}</p>
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span>Evidence Items</span>
-              <span className="text-muted-foreground">
-                {stats?.totalEvidence || 0} / {stats?.maxEvidence || 50}
-              </span>
+          <div className="rounded-md border bg-muted/20 p-3 text-sm">
+            <p className="text-xs text-muted-foreground font-medium mb-2">Current Workspace Usage</p>
+            <div className="flex flex-wrap gap-x-6 gap-y-1 text-muted-foreground">
+              <span>{stats?.totalClients || 0} clients</span>
+              <span>{stats?.totalEvidence || 0} evidence items</span>
+              <span>{stats?.totalAssets || 0} assets</span>
+              <span>{stats?.openTickets || 0} open tickets</span>
             </div>
-            <Progress
-              value={
-                ((stats?.totalEvidence || 0) / (stats?.maxEvidence || 50)) * 100
-              }
-              className="h-2"
-            />
-            {stats && stats.totalEvidence >= (stats.maxEvidence || 50) && (
-              <div className="flex items-center gap-1 text-xs text-destructive">
-                <AlertTriangle className="w-3 h-3" />
-                Evidence limit reached. Upgrade to add more.
-              </div>
-            )}
           </div>
         </CardContent>
       </Card>
@@ -173,9 +186,9 @@ export default function SettingsPage() {
                   <p className="text-xs text-muted-foreground mt-1">
                     {mod.description}
                   </p>
-                  {mod.requiredPlan && (
+                  {mod.operatorOsFeatureKey && (
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Required plan: {mod.requiredPlan}
+                      OperatorOS feature: {mod.operatorOsFeatureKey}
                     </p>
                   )}
                 </div>

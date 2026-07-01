@@ -27,46 +27,45 @@ export default function RefundPage() {
           <section>
             <h2 className="text-lg font-semibold mb-2">Overview</h2>
             <p>
-              We want you to be satisfied with Tech Deck. This policy explains when refunds are
-              available, how to request one, and what to expect.
+              Tech Deck access may be provided through an OperatorOS account or subscription. This
+              policy explains how refund requests are routed when billing is managed outside Tech Deck.
             </p>
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold mb-2">14-Day Money-Back Guarantee (New Subscribers)</h2>
+            <h2 className="text-lg font-semibold mb-2">OperatorOS Billing Relationship</h2>
             <p>
-              If you subscribe to a paid plan for the first time and are not satisfied, you may
-              request a full refund within <strong>14 days</strong> of your initial paid charge.
-              This applies to your first paid month or first annual period only.
+              Subscription and billing management may be handled through OperatorOS. Refund handling
+              depends on the OperatorOS billing relationship and the terms that applied to the
+              account or workspace at the time of purchase.
             </p>
             <p>
-              The Solo plan is free and is not subject to refund.
+              Tech Deck does not provide local upgrade, downgrade, cancellation, or refund controls.
             </p>
           </section>
 
           <section>
             <h2 className="text-lg font-semibold mb-2">Monthly Subscriptions</h2>
             <p>
-              After the 14-day window, monthly subscription fees are non-refundable. You can cancel
-              at any time to stop future charges. You will retain access through the end of the
-              current billing period.
+              Monthly billing terms, cancellation timing, and refund eligibility are governed by
+              the OperatorOS account or subscription under which Tech Deck is accessed.
             </p>
           </section>
 
           <section>
             <h2 className="text-lg font-semibold mb-2">Annual Subscriptions</h2>
             <p>
-              If you cancel an annual subscription after the 14-day refund window, we may issue a
-              prorated refund for unused months at our discretion. Prorated refunds are calculated
-              from the cancellation date and exclude any discount you received for paying annually.
+              Annual subscription handling, including any prorated refund or credit, depends on the
+              OperatorOS billing relationship and applicable purchase terms.
             </p>
           </section>
 
           <section>
             <h2 className="text-lg font-semibold mb-2">Plan Downgrades and Upgrades</h2>
             <p>
-              Upgrading mid-cycle is prorated and billed immediately. Downgrading takes effect at
-              the next billing cycle; no refund is issued for the unused portion of the higher tier.
+              Plan upgrades, downgrades, cancellations, and billing state changes are managed in
+              OperatorOS. Tech Deck receives a read-only entitlement snapshot and cannot change the
+              billing relationship locally.
             </p>
           </section>
 
@@ -83,9 +82,8 @@ export default function RefundPage() {
           <section>
             <h2 className="text-lg font-semibold mb-2">Non-Refundable Charges</h2>
             <ul className="list-disc pl-5 space-y-1 mt-2">
-              <li>Charges older than 14 days for first-time subscribers</li>
-              <li>Monthly subscriptions billed beyond the first month</li>
-              <li>Add-ons or one-time fees, unless otherwise specified</li>
+              <li>Charges not eligible under the applicable OperatorOS billing terms</li>
+              <li>Add-ons or one-time fees, unless the billing relationship says otherwise</li>
               <li>Charges incurred while account is in violation of the Terms of Service</li>
             </ul>
           </section>
@@ -93,19 +91,18 @@ export default function RefundPage() {
           <section>
             <h2 className="text-lg font-semibold mb-2">How to Request a Refund</h2>
             <p>
-              To request a refund, contact our support team through the Service with the following
-              information:
+              To request a refund, contact the OperatorOS account owner or support channel tied to
+              your billing relationship. Include the following information when available:
             </p>
             <ul className="list-disc pl-5 space-y-1 mt-2">
               <li>Account email address</li>
               <li>Date of charge</li>
-              <li>Stripe receipt or charge ID (optional but speeds processing)</li>
+              <li>Receipt, invoice, or charge ID if available</li>
               <li>Reason for the refund request</li>
             </ul>
             <p>
-              We respond to refund requests within <strong>5 business days</strong>. Approved
-              refunds are issued to the original payment method and typically appear within 5-10
-              business days depending on your bank.
+              Approved refunds, if any, are issued according to the OperatorOS billing relationship
+              and payment processor timelines.
             </p>
           </section>
 

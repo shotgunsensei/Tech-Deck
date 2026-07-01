@@ -4,7 +4,7 @@ import { isAuthenticated } from "../../auth";
 import { requireRole } from "../../authz";
 import { emitEvent } from "../../core/events/helpers";
 import { z } from "zod";
-import { requireFeature } from "../../core/billing/enforcePlan";
+import { checkTenantFeatureAccess, requireFeature } from "../../core/billing/enforcePlan";
 import { requireNotPaused } from "../../core/middleware/requireNotPaused";
 
 const upsertPageSchema = z.object({
@@ -201,6 +201,10 @@ export function registerStatusRoutes(app: Express) {
       const page = await storage.getStatusPageBySlug(req.params.slug);
       if (!page || !page.isPublic) {
         return res.status(404).json({ message: "Status page not found" });
+      }
+      const access = await checkTenantFeatureAccess(page.tenantId, "status");
+      if (!access.ok) {
+        return res.status(access.status).json({ error: access.error, message: access.message });
       }
 
       const components = await storage.getStatusComponentsByTenant(page.tenantId);

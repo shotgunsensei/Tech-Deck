@@ -26,6 +26,8 @@ function hasOperatorOsAccess(user: Awaited<ReturnType<typeof getUser>>): boolean
   if (!user) return false;
   if (user.revokedAt) return false;
   const snapshot = parseSnapshot(user.entitlementSnapshotJson);
+  const operatorOsManaged = !!(user.operatorosUserId || user.ssoSubject || user.operatorosTenantId);
+  if (operatorOsManaged && !snapshot) return false;
   if (snapshot && snapshot.enabled === false) return false;
   return true;
 }

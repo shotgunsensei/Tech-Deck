@@ -65,4 +65,22 @@ describe("session revocation gate", () => {
     expect(res.status).toBe(403);
     expect(res.body.code).toBe("module_access_denied");
   });
+
+  it("blocks an OperatorOS-managed session when the entitlement snapshot is missing", async () => {
+    authMocks.getUser.mockResolvedValue({
+      id: "missing-snapshot-user",
+      revokedAt: null,
+      operatorosUserId: "os-user-missing",
+      ssoSubject: "sub-missing",
+      operatorosTenantId: "os-tenant-missing",
+      entitlementSnapshotJson: null,
+    });
+    const agent = request.agent(buildApp());
+
+    await agent.get("/test/session").expect(200);
+    const res = await agent.get("/protected");
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe("module_access_denied");
+  });
 });

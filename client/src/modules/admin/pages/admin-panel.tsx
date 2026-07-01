@@ -1,7 +1,7 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,31 +18,17 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import {
   Building2,
   Users,
   ShieldCheck,
   ShieldOff,
   Trash2,
-  Play,
-  Pause,
+  ExternalLink,
   AlertTriangle,
-  CreditCard,
+  CheckCircle2,
 } from "lucide-react";
 import { useState } from "react";
+import type { ReactNode } from "react";
 
 interface TenantSub {
   id: string;
@@ -56,6 +42,17 @@ interface TenantSub {
   cancelAtPeriodEnd: boolean;
 }
 
+interface OperatorOsStatus {
+  operatorosTenantId: string | null;
+  operatorosPlan: string | null;
+  subscriptionStatus: string | null;
+  accessLevel: string | null;
+  enabledFeatures: string[];
+  lastEntitlementSyncAt: string | null;
+  localRole: string | null;
+  revoked: boolean;
+}
+
 interface AdminTenant {
   id: string;
   name: string;
@@ -64,6 +61,9 @@ interface AdminTenant {
   memberCount: number;
   createdAt: string;
   subscription: TenantSub | null;
+  legacySubscription?: TenantSub | null;
+  operatoros?: OperatorOsStatus;
+  operatorosUrl?: string;
 }
 
 interface AdminUser {
@@ -76,182 +76,193 @@ interface AdminUser {
   createdAt: string;
 }
 
-function getPauseDaysRemaining(pausedAt: string | null): number | null {
-  if (!pausedAt) return null;
-  const paused = new Date(pausedAt);
-  const now = new Date();
-  const daysPaused = Math.floor((now.getTime() - paused.getTime()) / (1000 * 60 * 60 * 24));
-  return Math.max(0, 90 - daysPaused);
-}
+const BLOCKING_STATUSES = new Set(["past_due", "unpaid", "canceled"]);
 
-interface SubscriptionPlan {
-  id: string;
-  code: string;
-  name: string;
-  monthlyPriceCents: number;
-}
-
-const STATUSES = [
-  { value: "active", label: "Active" },
-  { value: "trialing", label: "Trialing" },
-  { value: "past_due", label: "Past Due" },
-  { value: "canceled", label: "Canceled" },
-  { value: "incomplete", label: "Incomplete" },
-  { value: "incomplete_expired", label: "Incomplete (Expired)" },
-  { value: "unpaid", label: "Unpaid" },
-];
-
-function ChangeSubscriptionDialog({
-  open,
-  onClose,
-  tenant,
-  plans,
-}: {
-  open: boolean;
-  onClose: () => void;
-  tenant: AdminTenant;
-  plans: SubscriptionPlan[];
-}) {
-  const { toast } = useToast();
-  const currentPlan = tenant.subscription?.planCode || "solo";
-  const currentStatus = tenant.subscription?.status || "active";
-  const [selectedPlan, setSelectedPlan] = useState(currentPlan);
-  const [selectedStatus, setSelectedStatus] = useState(currentStatus);
-
-  const mutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("PATCH", `/api/admin/tenants/${tenant.id}/subscription`, {
-        planCode: selectedPlan,
-        status: selectedStatus,
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants"] });
-      toast({ title: "Subscription updated" });
-      onClose();
-    },
-    onError: (err: any) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    },
-  });
-
-  const selectedPlanData = plans.find((p) => p.code === selectedPlan);
-  const hasChanges = selectedPlan !== currentPlan || selectedStatus !== currentStatus;
-
+function configuredOperatorOsUrl(apiUrl?: string): string | undefined {
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <CreditCard className="w-4 h-4" />
-            Change Subscription — {tenant.name}
-          </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 mt-2">
-          {plans.length === 0 && (
-            <p className="text-sm text-destructive" data-testid="text-plans-error">
-              Unable to load subscription plans. Please try again later.
-            </p>
-          )}
-          <div className="space-y-2">
-            <Label>Plan</Label>
-            <Select value={selectedPlan} onValueChange={setSelectedPlan} disabled={plans.length === 0}>
-              <SelectTrigger data-testid="select-plan">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {plans.map((plan) => (
-                  <SelectItem key={plan.code} value={plan.code} data-testid={`option-plan-${plan.code}`}>
-                    {plan.name} — ${(plan.monthlyPriceCents / 100).toFixed(0)}/mo
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {selectedPlanData && (
-              <p className="text-xs text-muted-foreground">
-                ${(selectedPlanData.monthlyPriceCents / 100).toFixed(0)}/month
-              </p>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            <Label>Status</Label>
-            <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-              <SelectTrigger data-testid="select-status">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {STATUSES.map((s) => (
-                  <SelectItem key={s.value} value={s.value} data-testid={`option-status-${s.value}`}>
-                    {s.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {tenant.subscription?.stripeSubscriptionId && (
-            <p className="text-xs text-amber-600 dark:text-amber-400">
-              This tenant has an active Stripe subscription. Changing the plan here will override the local record but won't modify the Stripe subscription itself.
-            </p>
-          )}
-
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={onClose} data-testid="button-cancel-sub-change">
-              Cancel
-            </Button>
-            <Button
-              onClick={() => mutation.mutate()}
-              disabled={mutation.isPending || !hasChanges || plans.length === 0}
-              data-testid="button-confirm-sub-change"
-            >
-              {mutation.isPending ? "Saving..." : "Save Changes"}
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+    (import.meta.env.VITE_OPERATOROS_ADMIN_URL as string | undefined) ||
+    (import.meta.env.VITE_OPERATOROS_BILLING_URL as string | undefined) ||
+    (import.meta.env.VITE_OPERATOROS_BASE_URL as string | undefined) ||
+    apiUrl
   );
 }
 
-function StatusBadge({ status, pausedAt }: { status: string; pausedAt: string | null }) {
-  if (pausedAt) {
-    const daysLeft = getPauseDaysRemaining(pausedAt);
+function formatValue(value: string | null | undefined) {
+  return value && value.trim().length > 0 ? value : "Not synced";
+}
+
+function formatDate(value: string | null | undefined) {
+  if (!value) return "Not synced";
+  return new Date(value).toLocaleString();
+}
+
+function SubscriptionStatusBadge({ status, revoked }: { status: string | null | undefined; revoked: boolean }) {
+  if (revoked) {
     return (
-      <Badge variant="destructive" data-testid="badge-paused">
-        Paused ({daysLeft}d left)
+      <Badge variant="destructive" data-testid="badge-revoked">
+        Revoked
       </Badge>
     );
   }
-  switch (status) {
-    case "active":
-      return <Badge variant="default" data-testid="badge-active">Active</Badge>;
-    case "trialing":
-      return <Badge variant="secondary" data-testid="badge-trialing">Trialing</Badge>;
-    case "past_due":
-      return <Badge variant="destructive" data-testid="badge-past-due">Past Due</Badge>;
-    case "canceled":
-      return <Badge variant="destructive" data-testid="badge-canceled">Canceled</Badge>;
-    default:
-      return <Badge variant="outline" data-testid="badge-status">{status || "No Subscription"}</Badge>;
+  if (status && BLOCKING_STATUSES.has(status)) {
+    return (
+      <Badge variant="destructive" data-testid="badge-blocking-status">
+        {status.replace("_", " ")}
+      </Badge>
+    );
   }
+  if (status === "active") return <Badge data-testid="badge-active">Active</Badge>;
+  if (status === "trialing") return <Badge variant="secondary" data-testid="badge-trialing">Trialing</Badge>;
+  return <Badge variant="outline" data-testid="badge-status">{formatValue(status)}</Badge>;
+}
+
+function SnapshotField({ label, value, testId }: { label: string; value: ReactNode; testId: string }) {
+  return (
+    <div className="min-w-0 rounded-md border bg-muted/20 p-3">
+      <div className="text-xs uppercase text-muted-foreground">{label}</div>
+      <div className="mt-1 truncate text-sm font-medium" data-testid={testId}>{value}</div>
+    </div>
+  );
+}
+
+function TenantCard({
+  tenant,
+  operatorosUrl,
+  onDelete,
+  deleting,
+}: {
+  tenant: AdminTenant;
+  operatorosUrl?: string;
+  onDelete: () => void;
+  deleting: boolean;
+}) {
+  const os = tenant.operatoros;
+  const features = os?.enabledFeatures || [];
+  const legacy = tenant.legacySubscription || tenant.subscription;
+
+  return (
+    <Card data-testid={`card-tenant-${tenant.id}`}>
+      <CardContent className="p-4 space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="font-medium" data-testid={`text-tenant-name-${tenant.id}`}>
+                {tenant.name}
+              </h3>
+              <SubscriptionStatusBadge status={os?.subscriptionStatus} revoked={os?.revoked === true} />
+              <Badge variant="outline">OperatorOS managed</Badge>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {tenant.slug} - {tenant.memberCount} member(s) - Created {new Date(tenant.createdAt).toLocaleDateString()}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              asChild={!!operatorosUrl}
+              disabled={!operatorosUrl}
+              data-testid={`button-manage-operatoros-${tenant.id}`}
+            >
+              {operatorosUrl ? (
+                <a href={operatorosUrl} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="w-3 h-3 mr-1" />
+                  Manage in OperatorOS
+                </a>
+              ) : (
+                <span>
+                  <ExternalLink className="w-3 h-3 mr-1" />
+                  Manage in OperatorOS
+                </span>
+              )}
+            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  data-testid={`button-delete-tenant-${tenant.id}`}
+                >
+                  <Trash2 className="w-3 h-3 mr-1" />
+                  Delete
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Tenant</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete "{tenant.name}" and all associated Tech Deck data.
+                    This action cannot be undone and does not change OperatorOS billing or entitlements.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={onDelete}
+                    disabled={deleting}
+                    className="bg-destructive text-destructive-foreground"
+                    data-testid="button-confirm-delete"
+                  >
+                    Delete Tenant
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <SnapshotField label="OperatorOS Tenant ID" value={formatValue(os?.operatorosTenantId)} testId={`text-os-tenant-${tenant.id}`} />
+          <SnapshotField label="OperatorOS Plan" value={formatValue(os?.operatorosPlan)} testId={`text-os-plan-${tenant.id}`} />
+          <SnapshotField label="Subscription Status" value={formatValue(os?.subscriptionStatus)} testId={`text-os-status-${tenant.id}`} />
+          <SnapshotField label="Tech Deck Access Level" value={formatValue(os?.accessLevel)} testId={`text-os-access-${tenant.id}`} />
+          <SnapshotField label="Last Entitlement Sync" value={formatDate(os?.lastEntitlementSyncAt)} testId={`text-os-sync-${tenant.id}`} />
+          <SnapshotField label="Local Role" value={formatValue(os?.localRole)} testId={`text-local-role-${tenant.id}`} />
+          <SnapshotField
+            label="Revoked"
+            value={os?.revoked ? "Yes" : "No"}
+            testId={`text-revoked-${tenant.id}`}
+          />
+          <SnapshotField
+            label="Legacy Billing Row"
+            value={legacy ? `${legacy.planCode} / ${legacy.status}` : "None"}
+            testId={`text-legacy-sub-${tenant.id}`}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <div className="text-xs uppercase text-muted-foreground">Enabled Features</div>
+          {features.length > 0 ? (
+            <div className="flex flex-wrap gap-2" data-testid={`list-features-${tenant.id}`}>
+              {features.map((feature) => (
+                <Badge key={feature} variant="secondary">
+                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                  {feature}
+                </Badge>
+              ))}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <AlertTriangle className="w-4 h-4" />
+              No OperatorOS entitlement snapshot has been synced for this tenant.
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export function AdminPanelPage() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<"tenants" | "users">("tenants");
-  const [subDialogTenant, setSubDialogTenant] = useState<AdminTenant | null>(null);
 
-  const { data: tenantsData, isLoading: tenantsLoading } = useQuery<{ tenants: AdminTenant[] }>({
+  const { data: tenantsData, isLoading: tenantsLoading } = useQuery<{ tenants: AdminTenant[]; operatorosUrl?: string }>({
     queryKey: ["/api/admin/tenants"],
   });
 
   const { data: usersData, isLoading: usersLoading } = useQuery<{ users: AdminUser[] }>({
     queryKey: ["/api/admin/users"],
-  });
-
-  const { data: plansData } = useQuery<{ plans: SubscriptionPlan[] }>({
-    queryKey: ["/api/admin/plans"],
   });
 
   const toggleAdminMutation = useMutation({
@@ -261,32 +272,6 @@ export function AdminPanelPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
       toast({ title: "User updated" });
-    },
-    onError: (err: any) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    },
-  });
-
-  const pauseMutation = useMutation({
-    mutationFn: async (tenantId: string) => {
-      await apiRequest("POST", `/api/admin/tenants/${tenantId}/pause`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants"] });
-      toast({ title: "Tenant paused" });
-    },
-    onError: (err: any) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    },
-  });
-
-  const unpauseMutation = useMutation({
-    mutationFn: async (tenantId: string) => {
-      await apiRequest("POST", `/api/admin/tenants/${tenantId}/unpause`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/tenants"] });
-      toast({ title: "Tenant unpaused" });
     },
     onError: (err: any) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -308,13 +293,14 @@ export function AdminPanelPage() {
 
   const tenants = tenantsData?.tenants || [];
   const users = usersData?.users || [];
+  const operatorosUrl = configuredOperatorOsUrl(tenantsData?.operatorosUrl);
 
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
       <div>
         <h1 className="text-2xl font-semibold" data-testid="text-admin-title">System Administration</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Manage all tenants, users, and system settings
+          Review tenants, users, and OperatorOS-managed entitlement state.
         </p>
       </div>
 
@@ -341,7 +327,7 @@ export function AdminPanelPage() {
         <div className="space-y-3">
           {tenantsLoading ? (
             <div className="space-y-3">
-              {[1, 2, 3].map((i) => <Skeleton key={i} className="h-24 w-full" />)}
+              {[1, 2, 3].map((i) => <Skeleton key={i} className="h-40 w-full" />)}
             </div>
           ) : tenants.length === 0 ? (
             <Card>
@@ -351,105 +337,13 @@ export function AdminPanelPage() {
             </Card>
           ) : (
             tenants.map((tenant) => (
-              <Card key={tenant.id} data-testid={`card-tenant-${tenant.id}`}>
-                <CardContent className="p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="space-y-1 min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-medium" data-testid={`text-tenant-name-${tenant.id}`}>
-                          {tenant.name}
-                        </h3>
-                        <StatusBadge
-                          status={tenant.subscription?.status || "none"}
-                          pausedAt={tenant.subscription?.pausedAt || null}
-                        />
-                        {tenant.subscription?.planCode && (
-                          <Badge variant="outline" data-testid={`badge-plan-${tenant.id}`}>
-                            {tenant.subscription.planCode}
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {tenant.slug} - {tenant.memberCount} member(s) - Created {new Date(tenant.createdAt).toLocaleDateString()}
-                      </p>
-                      {tenant.subscription?.pausedAt && (
-                        <p className="text-sm text-destructive flex items-center gap-1">
-                          <AlertTriangle className="w-3 h-3" />
-                          Account paused since {new Date(tenant.subscription.pausedAt).toLocaleDateString()}
-                          {" - "}
-                          {getPauseDaysRemaining(tenant.subscription.pausedAt)} days until deletion
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setSubDialogTenant(tenant)}
-                        data-testid={`button-change-sub-${tenant.id}`}
-                      >
-                        <CreditCard className="w-3 h-3 mr-1" />
-                        Change Plan
-                      </Button>
-                      {tenant.subscription?.pausedAt ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => unpauseMutation.mutate(tenant.id)}
-                          disabled={unpauseMutation.isPending}
-                          data-testid={`button-unpause-${tenant.id}`}
-                        >
-                          <Play className="w-3 h-3 mr-1" />
-                          Unpause
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => pauseMutation.mutate(tenant.id)}
-                          disabled={pauseMutation.isPending}
-                          data-testid={`button-pause-${tenant.id}`}
-                        >
-                          <Pause className="w-3 h-3 mr-1" />
-                          Pause
-                        </Button>
-                      )}
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            data-testid={`button-delete-tenant-${tenant.id}`}
-                          >
-                            <Trash2 className="w-3 h-3 mr-1" />
-                            Delete
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Tenant</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This will permanently delete "{tenant.name}" and ALL associated data
-                              including evidence files, clients, users, and settings. This action
-                              cannot be undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => deleteTenantMutation.mutate(tenant.id)}
-                              className="bg-destructive text-destructive-foreground"
-                              data-testid="button-confirm-delete"
-                            >
-                              Delete Everything
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              <TenantCard
+                key={tenant.id}
+                tenant={tenant}
+                operatorosUrl={configuredOperatorOsUrl(tenant.operatorosUrl) || operatorosUrl}
+                deleting={deleteTenantMutation.isPending}
+                onDelete={() => deleteTenantMutation.mutate(tenant.id)}
+              />
             ))
           )}
         </div>
@@ -525,15 +419,6 @@ export function AdminPanelPage() {
             ))
           )}
         </div>
-      )}
-
-      {subDialogTenant && (
-        <ChangeSubscriptionDialog
-          open={!!subDialogTenant}
-          onClose={() => setSubDialogTenant(null)}
-          tenant={subDialogTenant}
-          plans={plansData?.plans || []}
-        />
       )}
     </div>
   );

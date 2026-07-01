@@ -27,7 +27,11 @@ export function PausedBanner() {
   const blocked = !!status && BLOCKING.has(status);
   if (!blocked) return null;
 
-  const operatorosUrl = data?.operatorosBillingUrl || "https://operatoros.app/billing";
+  const operatorosUrl =
+    data?.operatorosBillingUrl ||
+    (import.meta.env.VITE_OPERATOROS_BILLING_URL as string | undefined) ||
+    (import.meta.env.VITE_OPERATOROS_BASE_URL as string | undefined) ||
+    "/billing";
 
   return (
     <div className="bg-destructive/10 border-b border-destructive/20 px-4 py-3" data-testid="banner-paused">

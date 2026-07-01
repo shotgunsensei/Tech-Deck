@@ -1,23 +1,27 @@
 import type { Response, NextFunction } from "express";
+import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { users, tenantMembers } from "@shared/schema";
 import { storage } from "../../storage";
 import { logger } from "../../logger";
+import { db } from "../../db";
 import {
   parseSnapshot,
   isBlockingStatus,
-  defaultFeaturesFor,
+  defaultLimitsFor,
+  type EntitlementLimits,
   type EntitlementSnapshot,
 } from "../../auth/entitlements";
 
+type EntitledFeature = "api" | "portal" | "status" | "webhooks" | "reports" | "intake";
+
 /**
- * OperatorOS is the authority for plans/entitlements (Task #12).
+ * OperatorOS is the authority for plans/entitlements.
  *
- * Both `requireFeature` and `checkLimit` now read the per-user entitlement
- * snapshot persisted at `users.entitlement_snapshot_json` on every SSO
- * login (or the server-to-server sync endpoint). The legacy lookup that
- * consulted `tenant_subscriptions` + `subscription_plans.limits` has been
- * removed. When a request arrives without a hydrated user (public/license/
- * webhook routes mounted before `isAuthenticated`), enforcement is skipped
- * and the route's own auth layer is responsible.
+ * Authenticated feature and limit checks read the per-user entitlement
+ * snapshot stored on users.entitlement_snapshot_json. A legacy fallback can
+ * be enabled only for non-production migration drills by setting
+ * ENABLE_LEGACY_ENTITLEMENT_FALLBACK=true. Production never reads local
+ * tenant_subscriptions as an access authority.
  */
 
 function getSnapshotFromReq(req: any): EntitlementSnapshot | null {
@@ -26,49 +30,108 @@ function getSnapshotFromReq(req: any): EntitlementSnapshot | null {
   return parseSnapshot(profile.entitlementSnapshotJson);
 }
 
-/**
- * Legacy fallback for users whose snapshot hasn't been hydrated yet
- * (pre-Task-#12 row, or OperatorOS sync hasn't fired). Reads
- * `tenant_subscriptions` + plan defaults to decide blocking + features
- * so feature gating doesn't fail open. Logged once per request.
- */
-const _legacyWarnedTenants = new Set<string>();
+function isOperatorOsManagedProfile(profile: Record<string, unknown> | undefined): boolean {
+  if (!profile) return false;
+  return !!(profile.operatorosUserId || profile.ssoSubject || profile.operatorosTenantId);
+}
+
+function canUseLegacyFallback(): boolean {
+  return process.env.ENABLE_LEGACY_ENTITLEMENT_FALLBACK === "true" && process.env.NODE_ENV !== "production";
+}
+
+const legacyWarnedTenants = new Set<string>();
 function warnLegacyOnce(tenantId: string, extra: Record<string, unknown>) {
-  if (_legacyWarnedTenants.has(tenantId)) return;
-  _legacyWarnedTenants.add(tenantId);
-  logger.warn({ tenantId, ...extra }, "[enforcePlan] using legacy fallback (snapshot not yet hydrated)");
+  if (legacyWarnedTenants.has(tenantId)) return;
+  legacyWarnedTenants.add(tenantId);
+  logger.warn({ tenantId, ...extra }, "[enforcePlan] using legacy migration fallback");
 }
 
 async function getLegacyEntitlementForTenant(
   tenantId: string,
 ): Promise<{ blocked: boolean; features: string[]; limits: Record<string, number>; accessLevel: string } | null> {
+  if (!canUseLegacyFallback()) return null;
   try {
     const sub = await storage.getTenantSubscription(tenantId);
     if (!sub) return null;
     const status = (sub.status || "").toLowerCase();
-    const blocked = ["past_due", "unpaid", "canceled"].includes(status);
     const accessLevel = (sub.planCode || "basic").toLowerCase();
-    const features = defaultFeaturesFor(accessLevel);
-    const limits = (await import("../../auth/entitlements")).defaultLimitsFor(accessLevel) as Record<string, number>;
-    return { blocked, features, limits, accessLevel };
+    return {
+      blocked: ["past_due", "unpaid", "canceled"].includes(status),
+      features: [],
+      limits: defaultLimitsFor(accessLevel) as Record<string, number>,
+      accessLevel,
+    };
   } catch {
     return null;
   }
 }
 
-import { defaultLimitsFor, type EntitlementLimits } from "../../auth/entitlements";
-import { db } from "../../db";
-import { users, tenantMembers } from "@shared/schema";
-import { and, eq, isNotNull } from "drizzle-orm";
+export async function getTenantEntitlementSnapshot(tenantId: string): Promise<EntitlementSnapshot | null> {
+  try {
+    const rows = await db
+      .select({ snapshot: users.entitlementSnapshotJson })
+      .from(users)
+      .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
+      .where(and(eq(tenantMembers.tenantId, tenantId), isNotNull(users.entitlementSnapshotJson)))
+      .orderBy(desc(users.lastEntitlementSyncAt))
+      .limit(1);
+    return parseSnapshot(rows[0]?.snapshot);
+  } catch (err) {
+    logger.warn({ tenantId, err: err instanceof Error ? err.message : String(err) }, "[enforcePlan] tenant snapshot lookup failed");
+    return null;
+  }
+}
 
-/**
- * Back-compat helper for legacy callers that pass either an Express req
- * (preferred — uses the authenticated user's snapshot) or a raw tenantId
- * (used by public/intake routes with no session). When given a tenantId
- * with no usable per-user snapshot we look up the most recent snapshot
- * belonging to any member of that tenant, then fall back to "basic" tier
- * defaults. Returns the entitlement limits object.
- */
+export type TenantFeatureAccessResult =
+  | { ok: true; snapshot: EntitlementSnapshot }
+  | { ok: false; status: number; error: string; message: string; accessLevel?: string; subscriptionStatus?: string };
+
+export async function checkTenantFeatureAccess(
+  tenantId: string,
+  feature: EntitledFeature,
+): Promise<TenantFeatureAccessResult> {
+  const snapshot = await getTenantEntitlementSnapshot(tenantId);
+  if (!snapshot) {
+    return {
+      ok: false,
+      status: 503,
+      error: "entitlement_snapshot_missing",
+      message: "OperatorOS entitlements are not synced for this tenant.",
+    };
+  }
+  if (snapshot.enabled === false) {
+    return {
+      ok: false,
+      status: 403,
+      error: "module_access_denied",
+      message: "Access to Tech Deck is disabled by OperatorOS.",
+      accessLevel: snapshot.accessLevel,
+      subscriptionStatus: snapshot.subscriptionStatus,
+    };
+  }
+  if (isBlockingStatus(snapshot.subscriptionStatus)) {
+    return {
+      ok: false,
+      status: 402,
+      error: "subscription_inactive",
+      message: "The OperatorOS subscription is not active.",
+      accessLevel: snapshot.accessLevel,
+      subscriptionStatus: snapshot.subscriptionStatus,
+    };
+  }
+  if (!snapshot.features.includes(feature)) {
+    return {
+      ok: false,
+      status: 402,
+      error: "plan_required",
+      message: `The ${feature} feature is not enabled by OperatorOS.`,
+      accessLevel: snapshot.accessLevel,
+      subscriptionStatus: snapshot.subscriptionStatus,
+    };
+  }
+  return { ok: true, snapshot };
+}
+
 export async function getTenantPlanLimits(
   reqOrTenantId: any | string,
 ): Promise<EntitlementLimits & Record<string, any>> {
@@ -76,31 +139,36 @@ export async function getTenantPlanLimits(
     const snap = getSnapshotFromReq(reqOrTenantId);
     if (snap) return snap.limits as EntitlementLimits & Record<string, any>;
   }
+
   const tenantId = typeof reqOrTenantId === "string" ? reqOrTenantId : reqOrTenantId?.tenantCtx?.tenantId;
   if (tenantId) {
-    try {
-      const rows = await db
-        .select({ snapshot: users.entitlementSnapshotJson })
-        .from(users)
-        .innerJoin(tenantMembers, eq(tenantMembers.userId, users.id))
-        .where(and(eq(tenantMembers.tenantId, tenantId), isNotNull(users.entitlementSnapshotJson)))
-        .limit(1);
-      const snap = parseSnapshot(rows[0]?.snapshot);
-      if (snap) return snap.limits as EntitlementLimits & Record<string, any>;
-    } catch {
-      // fall through to defaults
+    const snap = await getTenantEntitlementSnapshot(tenantId);
+    if (snap) return snap.limits as EntitlementLimits & Record<string, any>;
+
+    const legacy = await getLegacyEntitlementForTenant(tenantId);
+    if (legacy) {
+      warnLegacyOnce(tenantId, { limitLookup: true, accessLevel: legacy.accessLevel });
+      return legacy.limits as EntitlementLimits & Record<string, any>;
     }
   }
-  return defaultLimitsFor("basic") as EntitlementLimits & Record<string, any>;
+
+  return {} as EntitlementLimits & Record<string, any>;
 }
 
 function getCurrentMonthKey(): string {
   return new Date().toISOString().slice(0, 7);
 }
 
-export function requireFeature(feature: "api" | "portal" | "status" | "webhooks" | "reports" | "intake") {
-  return async (req: any, res: Response, _next: NextFunction) => {
-    const next = _next;
+function entitlementMissingResponse(res: Response, extra: Record<string, unknown>) {
+  return res.status(402).json({
+    error: "entitlement_snapshot_missing",
+    message: "OperatorOS entitlements are not synced. Sign in again from OperatorOS to refresh access.",
+    ...extra,
+  });
+}
+
+export function requireFeature(feature: EntitledFeature) {
+  return async (req: any, res: Response, next: NextFunction) => {
     try {
       const snapshot = getSnapshotFromReq(req);
       if (snapshot) {
@@ -122,23 +190,27 @@ export function requireFeature(feature: "api" | "portal" | "status" | "webhooks"
         return next();
       }
 
-      // No snapshot → legacy fallback so feature gating cannot fail open.
+      const profile = req.user?.profile as Record<string, unknown> | undefined;
+      if (isOperatorOsManagedProfile(profile)) {
+        return entitlementMissingResponse(res, { feature });
+      }
+
       const tenantId = req.tenantCtx?.tenantId;
       if (!tenantId) return next();
+
       const legacy = await getLegacyEntitlementForTenant(tenantId);
       if (!legacy) {
-        warnLegacyOnce(tenantId, { feature, found: false });
         return res.status(402).json({
-          error: "plan_required",
+          error: "entitlement_snapshot_missing",
           feature,
-          message: "Your OperatorOS entitlements are not yet synced. Sign in again to refresh.",
+          message: "OperatorOS entitlements are not synced for this tenant.",
         });
       }
       warnLegacyOnce(tenantId, { feature, accessLevel: legacy.accessLevel });
       if (legacy.blocked) {
         return res.status(402).json({
           error: "subscription_inactive",
-          message: "Your subscription is not active. Manage billing in OperatorOS.",
+          message: "Your legacy migration subscription is not active. Refresh OperatorOS entitlements.",
         });
       }
       if (!legacy.features.includes(feature)) {
@@ -146,13 +218,13 @@ export function requireFeature(feature: "api" | "portal" | "status" | "webhooks"
           error: "plan_required",
           feature,
           accessLevel: legacy.accessLevel,
-          message: `The ${feature} feature is not included in your current plan.`,
+          message: `The ${feature} feature is not included in the legacy migration fallback.`,
         });
       }
       return next();
     } catch (err) {
       logger.error({ err: err instanceof Error ? err.message : String(err) }, "[enforcePlan] requireFeature error");
-      return next();
+      return res.status(500).json({ error: "entitlement_check_failed", message: "Unable to verify OperatorOS entitlements." });
     }
   };
 }
@@ -167,15 +239,40 @@ export function checkLimit(limitType: "usersMax" | "webhooksMax" | "reportsPerMo
       let maxValue: number | undefined;
       let accessLevel = snapshot?.accessLevel;
       if (snapshot) {
+        if (isBlockingStatus(snapshot.subscriptionStatus) || !snapshot.enabled) {
+          return res.status(402).json({
+            error: "subscription_inactive",
+            status: snapshot.subscriptionStatus,
+            message: "Your OperatorOS subscription is not active. Manage billing in OperatorOS.",
+          });
+        }
         maxValue = snapshot.limits[limitType] as number | undefined;
       } else {
+        const profile = req.user?.profile as Record<string, unknown> | undefined;
+        if (isOperatorOsManagedProfile(profile)) {
+          return entitlementMissingResponse(res, { limit: limitType });
+        }
+
         const legacy = await getLegacyEntitlementForTenant(tenantId);
-        if (!legacy) return next();
+        if (!legacy) {
+          return res.status(402).json({
+            error: "entitlement_snapshot_missing",
+            limit: limitType,
+            message: "OperatorOS entitlements are not synced for this tenant.",
+          });
+        }
         warnLegacyOnce(tenantId, { limitType });
         maxValue = legacy.limits[limitType];
         accessLevel = legacy.accessLevel;
       }
-      if (!maxValue || maxValue <= 0) return next();
+      if (maxValue === undefined || maxValue === null) {
+        return res.status(402).json({
+          error: "entitlement_limit_missing",
+          limit: limitType,
+          accessLevel,
+          message: `OperatorOS has not synced the ${limitType} limit for this tenant.`,
+        });
+      }
 
       let currentValue = 0;
       switch (limitType) {
@@ -220,7 +317,7 @@ export function checkLimit(limitType: "usersMax" | "webhooksMax" | "reportsPerMo
       return next();
     } catch (err) {
       logger.error({ err: err instanceof Error ? err.message : String(err) }, "[enforcePlan] checkLimit error");
-      return next();
+      return res.status(500).json({ error: "entitlement_check_failed", message: "Unable to verify OperatorOS entitlements." });
     }
   };
 }

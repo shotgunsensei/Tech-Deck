@@ -54,13 +54,13 @@ export default function TermsPage() {
           <section>
             <h2 className="text-lg font-semibold mb-2">4. Subscription Plans and Billing</h2>
             <p>
-              The Service is offered on a subscription basis with multiple plan tiers. By subscribing,
-              you authorize us (via Stripe) to charge your payment method on a recurring basis until
-              cancelled. Pricing is shown in the application and may be updated with 30 days' notice.
+              Subscription and billing management may be handled through OperatorOS. Billing terms,
+              available plans, and payment methods are governed by the OperatorOS account or
+              subscription under which Tech Deck is accessed.
             </p>
             <p>
-              Subscriptions automatically renew at the end of each billing cycle unless cancelled
-              before the renewal date. You can cancel at any time from your billing settings.
+              Tech Deck stores a read-only entitlement snapshot from OperatorOS and does not provide
+              local upgrade, downgrade, pause, unpause, or cancellation controls.
             </p>
           </section>
 
@@ -71,8 +71,7 @@ export default function TermsPage() {
               <a href="/refund" className="text-primary underline underline-offset-2 hover:text-primary/80">
                 Refund Policy
               </a>
-              . Cancelling a subscription stops future charges; it does not retroactively refund prior
-              billing periods unless explicitly stated in the Refund Policy.
+              . Cancellation and refund handling depends on the OperatorOS billing relationship.
             </p>
           </section>
 
@@ -103,10 +102,9 @@ export default function TermsPage() {
           <section>
             <h2 className="text-lg font-semibold mb-2">8. Data Retention and Deletion</h2>
             <p>
-              Active subscribers' data is retained for the duration of the subscription. If your
-              subscription lapses beyond the grace period (currently 90 days), your tenant and all
-              associated data will be permanently deleted. You may export or delete your data at any
-              time before that date.
+              Customer Data is retained according to the account, workspace, and OperatorOS access
+              relationship under which Tech Deck is used. Tech Deck does not delete tenants based on
+              local billing state.
             </p>
           </section>
 
@@ -161,8 +159,9 @@ export default function TermsPage() {
             <h2 className="text-lg font-semibold mb-2">14. Termination</h2>
             <p>
               We may suspend or terminate your account immediately for breach of these Terms, fraud,
-              or non-payment. You may terminate at any time by deleting your account. Upon
-              termination, your right to use the Service ceases immediately.
+              or loss of required OperatorOS entitlement. You may terminate at any time by deleting
+              your account where self-service deletion is available. Upon termination, your right to
+              use the Service ceases immediately.
             </p>
           </section>
 

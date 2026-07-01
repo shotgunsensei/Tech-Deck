@@ -82,23 +82,12 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session): Promis
   const subData = subResponse as Stripe.Subscription;
   const priceId = subData.items.data[0]?.price?.id;
   const planCode = priceId ? getPlanCodeFromPriceId(priceId) : undefined;
-  const periodEnd = (subData as any).current_period_end;
-
-  await storage.upsertTenantSubscription({
-    tenantId,
-    stripeCustomerId: customerId,
-    stripeSubscriptionId: subscriptionId,
-    stripePriceId: priceId || null,
-    planCode: planCode || "solo",
-    status: subData.status === "active" ? "active" : subData.status === "trialing" ? "trialing" : "active",
-    currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : null,
-    cancelAtPeriodEnd: subData.cancel_at_period_end,
-  });
 
   await emitEvent("billing.subscription_updated", tenantId, undefined, "tenant_subscription", tenantId, {
     planCode: planCode || "solo",
-    status: "active",
+    status: subData.status,
     stripeSubscriptionId: subscriptionId,
+    legacyAuditOnly: true,
   });
 }
 
@@ -125,20 +114,11 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription): Prom
   const priceId = subscription.items.data[0]?.price?.id;
   const planCode = priceId ? getPlanCodeFromPriceId(priceId) : sub.planCode;
 
-  // Task #12: OperatorOS owns subscription_status; we record the event for
-  // audit but no longer pause/unpause tenants from the Stripe webhook.
-  await storage.updateTenantSubscription(sub.tenantId, {
-    stripeSubscriptionId: subscription.id,
-    stripePriceId: priceId || sub.stripePriceId,
-    planCode: planCode || sub.planCode,
-    status: subscription.status,
-    currentPeriodEnd: (subscription as any).current_period_end ? new Date((subscription as any).current_period_end * 1000) : null,
-    cancelAtPeriodEnd: subscription.cancel_at_period_end,
-  });
-
   await emitEvent("billing.subscription_updated", sub.tenantId, undefined, "tenant_subscription", sub.tenantId, {
     planCode,
     status: subscription.status,
+    stripeSubscriptionId: subscription.id,
+    legacyAuditOnly: true,
   });
 }
 
@@ -152,15 +132,11 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription): Pro
   }
   if (!sub) return;
 
-  // Task #12: status only; OperatorOS decides whether to revoke access.
-  await storage.updateTenantSubscription(sub.tenantId, {
-    status: "canceled",
-    cancelAtPeriodEnd: false,
-  });
-
   await emitEvent("billing.subscription_updated", sub.tenantId, undefined, "tenant_subscription", sub.tenantId, {
     planCode: sub.planCode,
     status: "canceled",
+    stripeSubscriptionId: subscription.id,
+    legacyAuditOnly: true,
   });
 }
 
@@ -171,10 +147,9 @@ async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
   const sub = await storage.getTenantSubscriptionByStripeCustomerId(customerId);
   if (!sub) return;
 
-  await storage.updateTenantSubscription(sub.tenantId, { status: "past_due" });
-
   await emitEvent("billing.payment_failed", sub.tenantId, undefined, "tenant_subscription", sub.tenantId, {
     invoiceId: invoice.id,
+    legacyAuditOnly: true,
   });
 }
 
@@ -185,11 +160,10 @@ async function handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
   const sub = await storage.getTenantSubscriptionByStripeCustomerId(customerId);
   if (!sub) return;
 
-  await storage.updateTenantSubscription(sub.tenantId, { status: "active" });
-
   await emitEvent("billing.subscription_updated", sub.tenantId, undefined, "tenant_subscription", sub.tenantId, {
     planCode: sub.planCode,
     status: "active",
     invoiceId: invoice.id,
+    legacyAuditOnly: true,
   });
 }

@@ -3,6 +3,7 @@ import { requireApiAuth, requireScopes } from "../../core/apiAuth";
 import { storage } from "../../storage";
 import { z } from "zod";
 import crypto from "crypto";
+import { checkTenantFeatureAccess } from "../../core/billing/enforcePlan";
 
 function hashKey(key: string): string {
   return crypto.createHash("sha256").update(key).digest("hex");
@@ -99,6 +100,10 @@ export function registerApiV1Routes(app: Express) {
       const page = await storage.getStatusPageBySlug(slug);
       if (!page || !page.isPublic) {
         return res.status(404).json({ error: "Status page not found" });
+      }
+      const access = await checkTenantFeatureAccess(page.tenantId, "status");
+      if (!access.ok) {
+        return res.status(access.status).json({ error: access.error, message: access.message });
       }
 
       const components = await storage.getStatusComponentsByTenant(page.tenantId);

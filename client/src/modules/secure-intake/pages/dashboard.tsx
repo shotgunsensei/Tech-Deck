@@ -33,8 +33,8 @@ export default function IntakeDashboardPage() {
         <Breadcrumbs items={[{ label: "Secure Intake" }]} />
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <AlertCircle className="w-10 h-10 text-muted-foreground opacity-40 mb-3" />
-          <p className="text-sm font-medium">{is402 ? "Secure Intake requires a plan upgrade" : "Failed to load dashboard"}</p>
-          <p className="text-xs text-muted-foreground mt-1">{is402 ? "Contact your admin to upgrade your plan." : "Please try again later."}</p>
+          <p className="text-sm font-medium">{is402 ? "Secure Intake is not enabled by OperatorOS" : "Failed to load dashboard"}</p>
+          <p className="text-xs text-muted-foreground mt-1">{is402 ? "Manage module access in OperatorOS, then sign in again." : "Please try again later."}</p>
         </div>
       </div>
     );

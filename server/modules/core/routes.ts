@@ -11,6 +11,7 @@ import {
 } from "@shared/schema";
 import { emitEvent } from "../../core/events/helpers";
 import { requireNotPaused } from "../../core/middleware/requireNotPaused";
+import { checkLimit } from "../../core/billing/enforcePlan";
 import Papa from "papaparse";
 import { db } from "../../db";
 import { pendingInvitations } from "@shared/schema";
@@ -124,12 +125,6 @@ export function registerCoreRoutes(app: Express) {
         const parsed = insertClientSchema.omit({ tenantId: true }).safeParse(req.body);
         if (!parsed.success) {
           return res.status(400).json({ message: parsed.error.errors[0]?.message || "Invalid input" });
-        }
-
-        const tenant = await storage.getTenantById(tenantId);
-        const clientCount = (await storage.getClientsByTenant(tenantId)).length;
-        if (tenant && clientCount >= tenant.maxClients) {
-          return res.status(400).json({ message: "Client limit reached. Upgrade your plan." });
         }
 
         const client = await storage.createClient({
@@ -374,13 +369,6 @@ export function registerCoreRoutes(app: Express) {
           return res.status(400).json({ message: "Maximum 500 rows per import" });
         }
 
-        const tenant = await storage.getTenantById(tenantId);
-        const existingClients = await storage.getClientsByTenant(tenantId);
-        const remaining = (tenant?.maxClients || 5) - existingClients.length;
-        if (rows.length > remaining) {
-          return res.status(400).json({ message: `Import would exceed client limit. ${remaining} slots remaining.` });
-        }
-
         const created: any[] = [];
         const errors: { row: number; message: string }[] = [];
 
@@ -563,6 +551,7 @@ export function registerCoreRoutes(app: Express) {
     isAuthenticated,
     requireRole("OWNER", "ADMIN"),
     requireNotPaused(),
+    checkLimit("usersMax"),
     async (req: any, res) => {
       try {
         const { tenantId, userId } = req.tenantCtx;

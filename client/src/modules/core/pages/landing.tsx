@@ -33,6 +33,14 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import heroImage from "@assets/techdeckhero_1771446566988.png";
 import logoImage from "@assets/ShotgunNinjaVaulticon_1770412982737.png";
 
+const OPERATOROS_URL =
+  (import.meta.env.VITE_OPERATOROS_BASE_URL as string | undefined) ||
+  "/login";
+
+const REQUEST_ACCESS_URL =
+  (import.meta.env.VITE_OPERATOROS_REQUEST_ACCESS_URL as string | undefined) ||
+  "mailto:hello@techdeck.app?subject=Tech%20Deck%20access";
+
 const painPoints = [
   {
     icon: AlertTriangle,
@@ -138,7 +146,7 @@ const useCases = [
     icon: Zap,
     title: "Solo Technicians",
     description:
-      "Free tier with the technician tools you actually need. Upgrade when the workload demands it.",
+      "A focused workspace for independent technicians launched through the same OperatorOS entitlement flow as larger teams.",
     bullets: [
       "Mobile view at /m for on-site work",
       "AI IT Ops Console for fast triage",
@@ -149,49 +157,45 @@ const useCases = [
 
 const plans = [
   {
-    name: "Solo",
-    price: "Free",
+    name: "Essentials",
+    price: "OperatorOS",
     tagline: "For independent technicians",
     features: [
-      "Core ticketing & evidence",
+      "Core ticketing and evidence",
       "Mobile technician view",
-      "1 user, 5 clients",
-      "1 GB evidence storage",
+      "OperatorOS-managed access",
+      "Entitlement-based limits",
     ],
-    cta: "Start Free",
-    href: "/register",
+    cta: "Request Access",
+    href: REQUEST_ACCESS_URL,
     highlighted: false,
   },
   {
-    name: "Pro",
-    price: "$29",
-    period: "/mo",
+    name: "Team",
+    price: "OperatorOS",
     tagline: "For small IT shops",
     features: [
-      "Everything in Solo",
+      "Everything in Essentials",
       "IT Ops Console (AI)",
-      "Up to 5 users",
-      "25 GB storage + webhooks",
-      "Public status pages",
+      "Team roles and audit logs",
+      "Webhooks and status pages when entitled",
     ],
-    cta: "Get Started",
-    href: "/register",
+    cta: "Launch from OperatorOS",
+    href: OPERATOROS_URL,
     highlighted: true,
   },
   {
     name: "MSP",
-    price: "$79",
-    period: "/mo",
+    price: "OperatorOS",
     tagline: "For managed service providers",
     features: [
-      "Everything in Pro",
-      "Up to 25 users",
-      "100 GB storage",
-      "API access + Secure Intake",
+      "Everything in Team",
+      "OperatorOS-controlled modules",
+      "API access and Secure Intake when entitled",
       "Compliance report packets",
     ],
-    cta: "Get Started",
-    href: "/register",
+    cta: "Manage in OperatorOS",
+    href: OPERATOROS_URL,
     highlighted: false,
   },
 ];
@@ -209,8 +213,8 @@ const faqs = [
     a: "MSPs, internal IT teams, and senior technicians who need ticketing, evidence, automation, and audit in one place — without stitching together five tools.",
   },
   {
-    q: "Is there a free plan?",
-    a: "Yes. The Solo plan is free forever and includes core ticketing, evidence management, and the mobile technician view. No credit card required to start.",
+    q: "How do I get access?",
+    a: "Tech Deck access is granted from OperatorOS. Launch Tech Deck from your OperatorOS workspace or request access from the account owner.",
   },
   {
     q: "How does multi-tenant isolation work?",
@@ -234,7 +238,7 @@ const faqs = [
   },
   {
     q: "How is billing handled?",
-    a: "Stripe-powered subscriptions with a payment grace period. Plan limits (seats, clients, storage) are enforced server-side. Upgrade or cancel from the in-app billing portal at any time.",
+    a: "Billing, plan changes, and module entitlements are managed in OperatorOS. Tech Deck receives a read-only entitlement snapshot and enforces it locally.",
   },
 ];
 
@@ -263,8 +267,8 @@ export default function LandingPage() {
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <Button asChild data-testid="button-login">
-              <a href="/login">
-                Sign in
+              <a href={OPERATOROS_URL}>
+                Launch from OperatorOS
                 <ArrowRight className="w-4 h-4 ml-1" />
               </a>
             </Button>
@@ -288,8 +292,8 @@ export default function LandingPage() {
               </h1>
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <Button size="lg" asChild data-testid="button-get-started">
-                  <a href="/register">
-                    Get Started Free
+                  <a href={OPERATOROS_URL}>
+                    Launch from OperatorOS
                     <ArrowRight className="w-4 h-4 ml-1" />
                   </a>
                 </Button>
@@ -304,11 +308,11 @@ export default function LandingPage() {
                 </Button>
               </div>
               <div className="flex items-center justify-center gap-4 mt-5 text-xs text-white/60">
-                <span>Free plan available</span>
+                <span>OperatorOS-managed access</span>
                 <span className="w-1 h-1 rounded-full bg-white/40" />
-                <span>No credit card required</span>
+                <span>Read-only entitlements</span>
                 <span className="w-1 h-1 rounded-full bg-white/40" />
-                <span>Cancel anytime</span>
+                <span>Request access from your workspace owner</span>
               </div>
             </div>
           </div>
@@ -378,7 +382,7 @@ export default function LandingPage() {
                 Everything in one stack
               </h2>
               <p className="text-muted-foreground">
-                Nine modules. One login. One audit trail. One bill.
+                Nine modules. One OperatorOS launch. One audit trail. One entitlement snapshot.
               </p>
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -443,10 +447,10 @@ export default function LandingPage() {
             <div className="text-center mb-12">
               <Badge variant="outline" className="mb-3">Pricing</Badge>
               <h2 className="text-3xl font-bold tracking-tight mb-2">
-                Pick the tier that fits the workload
+                Access follows your OperatorOS workspace
               </h2>
               <p className="text-muted-foreground">
-                Start free. Upgrade when the bench grows. Cancel any time.
+                Plan names, billing state, and module access are assigned in OperatorOS and synced into Tech Deck.
               </p>
             </div>
             <div className="grid md:grid-cols-3 gap-4">
@@ -468,9 +472,6 @@ export default function LandingPage() {
                     </div>
                     <div className="mb-6">
                       <span className="text-3xl font-bold tracking-tight">{plan.price}</span>
-                      {plan.period && (
-                        <span className="text-sm text-muted-foreground">{plan.period}</span>
-                      )}
                     </div>
                     <ul className="space-y-2 mb-6">
                       {plan.features.map((f) => (
@@ -493,7 +494,7 @@ export default function LandingPage() {
               ))}
             </div>
             <p className="text-center text-xs text-muted-foreground mt-6">
-              Need more seats, dedicated support, or on-prem? <a href="mailto:hello@techdeck.app" className="underline hover:text-foreground" data-testid="link-enterprise-contact">Contact us about Enterprise</a>.
+              Need a different module set or workspace access? <a href={REQUEST_ACCESS_URL} className="underline hover:text-foreground" data-testid="link-enterprise-contact">Request access</a>.
             </p>
           </div>
         </section>
@@ -634,21 +635,21 @@ export default function LandingPage() {
               Stop juggling tools. Start owning the stack.
             </h2>
             <p className="text-muted-foreground mb-6">
-              Spin up a free tenant in under a minute. Bring your team when you're ready.
+              Launch Tech Deck from OperatorOS so the right plan, role, and modules are already in place.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-3">
               <Button size="lg" asChild data-testid="button-final-cta-register">
-                <a href="/register">
-                  Get Started Free
+                <a href={OPERATOROS_URL}>
+                  Launch from OperatorOS
                   <ArrowRight className="w-4 h-4 ml-1" />
                 </a>
               </Button>
               <Button size="lg" variant="outline" asChild data-testid="button-final-cta-pricing">
-                <a href="#pricing">View Pricing</a>
+                <a href={REQUEST_ACCESS_URL}>Request Access</a>
               </Button>
             </div>
             <p className="text-xs text-muted-foreground mt-4">
-              No credit card required &middot; Cancel anytime &middot; Your data, your tenant
+              OperatorOS manages billing and access &middot; Tech Deck enforces the synced snapshot
             </p>
           </div>
         </section>
@@ -670,8 +671,8 @@ export default function LandingPage() {
               <a href="#features" className="hover:text-foreground transition-colors" data-testid="link-footer-features">Features</a>
               <a href="#pricing" className="hover:text-foreground transition-colors" data-testid="link-footer-pricing">Pricing</a>
               <a href="#faq" className="hover:text-foreground transition-colors" data-testid="link-footer-faq">FAQ</a>
-              <a href="/login" className="hover:text-foreground transition-colors" data-testid="link-footer-login">Sign in</a>
-              <a href="/register" className="hover:text-foreground transition-colors" data-testid="link-footer-register">Get Started</a>
+              <a href={OPERATOROS_URL} className="hover:text-foreground transition-colors" data-testid="link-footer-login">Launch from OperatorOS</a>
+              <a href={REQUEST_ACCESS_URL} className="hover:text-foreground transition-colors" data-testid="link-footer-register">Request Access</a>
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t text-xs text-muted-foreground">

@@ -13,6 +13,7 @@ export interface VaultModuleManifest {
   enabled: boolean;
   category: "core" | "feature";
   requiredPlan?: string;
+  operatorOsFeatureKey?: string;
 
   server?: {
     mountPath: string;

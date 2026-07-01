@@ -13,7 +13,7 @@ Pick an `id` (lowercase, no spaces), `name`, `description`, `version`, and `cate
 | id | `status` |
 | name | `Status Page` |
 | category | `"feature"` (or `"core"` if always-on) |
-| requiredPlan | `"free"` / `"pro"` / omit for core |
+| operatorOsFeatureKey | OperatorOS feature key, for example `"status"`; omit only for always-on core modules |
 
 ---
 
@@ -137,7 +137,7 @@ export const statusModule: VaultModuleManifest = {
   enabled: true,
   category: "feature",
   version: "1.0.0",
-  requiredPlan: "free",
+  operatorOsFeatureKey: "status",
   server: {
     mountPath: "/api/status",
     routesFile: "server/modules/status/routes.ts",

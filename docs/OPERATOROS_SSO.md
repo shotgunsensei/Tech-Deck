@@ -40,8 +40,8 @@ Tech Deck verifies HS256 only and rejects `alg=none`, RS256, JWKS-style tokens, 
 | `target_module_key` | `techdeck` | Yes | Authoritative module target. |
 | `target_module_enabled` | `true` | Yes | `false` denies launch. |
 | `target_module_access_level` | Plan/access level | Optional | Stored in entitlement snapshot. |
-| `target_module_features` | Feature list | Optional | Stored in entitlement snapshot. |
-| `target_module_limits` | Limit object | Optional | Merged into entitlement snapshot. |
+| `target_module_features` | Feature list | Optional | Stored as sent; absent means no local feature grant. |
+| `target_module_limits` | Limit object | Optional | Stored as sent; absent limit values block limit-gated mutations. |
 | `module_role` | Positive module role | Yes | `none` or empty denies launch. |
 | `tenant_role` | Tenant role | Optional | Can elevate local role to `ADMIN`; never to `OWNER`. |
 | `subscription_status` | Subscription state | Optional | Stored in entitlement snapshot. |

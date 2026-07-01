@@ -4,6 +4,7 @@ import { requireRole } from "../../authz";
 import { storage } from "../../storage";
 import { generateToken, hashToken } from "../../core/apiAuth";
 import { requireFeature } from "../../core/billing/enforcePlan";
+import { requireNotPaused } from "../../core/middleware/requireNotPaused";
 import { z } from "zod";
 
 export function registerApiTokenAdminRoutes(app: Express) {
@@ -12,6 +13,7 @@ export function registerApiTokenAdminRoutes(app: Express) {
     isAuthenticated,
     requireRole("OWNER", "ADMIN"),
     requireFeature("api"),
+    requireNotPaused(),
     async (req: Request, res: Response) => {
       try {
         const tenantId = (req as any).tenantCtx.tenantId;
@@ -36,6 +38,7 @@ export function registerApiTokenAdminRoutes(app: Express) {
     isAuthenticated,
     requireRole("OWNER", "ADMIN"),
     requireFeature("api"),
+    requireNotPaused(),
     async (req: Request, res: Response) => {
       try {
         const tenantId = (req as any).tenantCtx.tenantId;

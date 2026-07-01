@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "crypto";
 import type { Request, Response, NextFunction, RequestHandler } from "express";
 import { storage } from "../storage";
+import { checkTenantFeatureAccess } from "./billing/enforcePlan";
 
 export interface ApiAuthContext {
   tenantId: string;
@@ -48,6 +49,16 @@ export function requireApiAuth(): RequestHandler {
       tokenId: result.tokenId,
       scopes: result.scopes,
     };
+
+    const access = await checkTenantFeatureAccess(result.tenantId, "api");
+    if (!access.ok) {
+      return res.status(access.status).json({
+        error: access.error,
+        message: access.message,
+        accessLevel: access.accessLevel,
+        subscriptionStatus: access.subscriptionStatus,
+      });
+    }
 
     storage.updateApiTokenLastUsed(result.tokenId).catch(() => {});
 

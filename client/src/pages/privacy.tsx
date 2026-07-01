@@ -62,7 +62,7 @@ export default function PrivacyPage() {
             <ul className="list-disc pl-5 space-y-1 mt-2">
               <li>Provide, maintain, and improve the Service</li>
               <li>Authenticate your identity and manage your account</li>
-              <li>Process billing and subscription management</li>
+              <li>Display OperatorOS-managed billing and entitlement status</li>
               <li>Generate reports and analytics within your tenant workspace</li>
               <li>Send important service-related notifications</li>
               <li>Maintain audit logs for compliance and security purposes</li>
@@ -84,7 +84,7 @@ export default function PrivacyPage() {
             <h2 className="text-lg font-semibold mb-2">5. Data Sharing and Disclosure</h2>
             <p>We do not sell your personal information. We may share information only in the following circumstances:</p>
             <ul className="list-disc pl-5 space-y-1 mt-2">
-              <li><strong>Service providers:</strong> We use third-party services for payment processing (Stripe) and authentication. These providers have their own privacy policies.</li>
+              <li><strong>Service providers:</strong> We use third-party services for authentication, infrastructure, and billing relationships that may be managed through OperatorOS. These providers have their own privacy policies.</li>
               <li><strong>Legal requirements:</strong> We may disclose information if required by law, regulation, or legal process.</li>
               <li><strong>Business transfers:</strong> In connection with a merger, acquisition, or sale of assets, your information may be transferred.</li>
               <li><strong>With your consent:</strong> We may share information when you explicitly authorize us to do so.</li>
@@ -105,9 +105,9 @@ export default function PrivacyPage() {
             <h2 className="text-lg font-semibold mb-2">7. Data Retention</h2>
             <p>
               We retain your information for as long as your account is active or as needed to
-              provide the Service. If your account is deleted or your subscription lapses beyond
-              the grace period, your data will be permanently removed in accordance with our
-              data retention schedule.
+              provide the Service. If your account is deleted or OperatorOS access is revoked,
+              data handling follows the applicable workspace, OperatorOS relationship, and data
+              retention schedule.
             </p>
           </section>
 

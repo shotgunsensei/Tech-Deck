@@ -1,59 +1,40 @@
 import type { Response, NextFunction } from "express";
 import { parseSnapshot, isBlockingStatus, type EntitlementSnapshot } from "../../auth/entitlements";
-import { storage } from "../../storage";
 import { logger } from "../../logger";
 
-const _legacyWarnedTenants = new Set<string>();
-function warnLegacyOnce(tenantId: string) {
-  if (_legacyWarnedTenants.has(tenantId)) return;
-  _legacyWarnedTenants.add(tenantId);
-  logger.warn({ tenantId }, "[requireNotPaused] using legacy fallback (snapshot not yet hydrated)");
-}
-
-/**
- * Task #12: OperatorOS is the source of truth for subscription status.
- *
- * We block writes when the per-user entitlement snapshot reports a
- * subscription_status of past_due / unpaid / canceled, OR when the
- * snapshot reports the module is disabled for this user. The legacy
- * `tenant_subscriptions.pausedAt` column is no longer consulted —
- * Stripe webhooks still record events for audit but cannot independently
- * pause an account.
- *
- * When no snapshot is present (e.g., this middleware mounted on a route
- * served before authentication, or a legacy local-account user pre-Task-#12),
- * we allow the request through and let downstream auth do its job.
- */
 function getSnapshotFromReq(req: any): EntitlementSnapshot | null {
   const profile = req.user?.profile as Record<string, unknown> | undefined;
   if (!profile) return null;
   return parseSnapshot(profile.entitlementSnapshotJson);
 }
 
+function isOperatorOsManagedProfile(profile: Record<string, unknown> | undefined): boolean {
+  if (!profile) return false;
+  return !!(profile.operatorosUserId || profile.ssoSubject || profile.operatorosTenantId);
+}
+
+/**
+ * OperatorOS access-state middleware.
+ *
+ * The historical name remains for route compatibility, but the decision no
+ * longer consults tenant_subscriptions.pausedAt. OperatorOS snapshots block
+ * writes when the module is disabled or the subscription status is past_due,
+ * unpaid, or canceled. Missing snapshots fail closed for OperatorOS-managed
+ * users.
+ */
 export function requireNotPaused() {
   return async (req: any, res: Response, next: NextFunction) => {
     try {
       const snapshot = getSnapshotFromReq(req);
       if (!snapshot) {
-        // Legacy fallback so we don't fail open for pre-Task-#12 users.
-        const tenantId = req.tenantCtx?.tenantId;
-        if (!tenantId) return next();
-        try {
-          const sub = await storage.getTenantSubscription(tenantId);
-          if (!sub) return next();
-          warnLegacyOnce(tenantId);
-          const status = (sub.status || "").toLowerCase();
-          if (["past_due", "unpaid", "canceled"].includes(status) || (sub as any).pausedAt) {
-            return res.status(402).json({
-              error: "subscription_inactive",
-              status,
-              message: "Your subscription is not active. Manage billing in OperatorOS.",
-            });
-          }
-          return next();
-        } catch {
-          return next();
+        const profile = req.user?.profile as Record<string, unknown> | undefined;
+        if (isOperatorOsManagedProfile(profile)) {
+          return res.status(402).json({
+            error: "entitlement_snapshot_missing",
+            message: "OperatorOS entitlements are not synced. Sign in again from OperatorOS to refresh access.",
+          });
         }
+        return next();
       }
       if (snapshot.enabled === false) {
         return res.status(402).json({
@@ -72,7 +53,7 @@ export function requireNotPaused() {
       return next();
     } catch (err) {
       logger.error({ err: err instanceof Error ? err.message : String(err) }, "[requireNotPaused] error");
-      return next();
+      return res.status(500).json({ error: "entitlement_check_failed", message: "Unable to verify OperatorOS entitlements." });
     }
   };
 }

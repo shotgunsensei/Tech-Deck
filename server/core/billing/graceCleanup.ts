@@ -39,6 +39,16 @@ async function cleanupExpiredTenants(): Promise<void> {
 }
 
 export function startGraceCleanupJob(): void {
+  if (process.env.NODE_ENV === "production") {
+    console.log("[grace-cleanup] Disabled in production. OperatorOS owns subscription state and tenant access.");
+    return;
+  }
+
+  if (process.env.ENABLE_LEGACY_BILLING_GRACE_CLEANUP !== "true") {
+    console.log("[grace-cleanup] Disabled. OperatorOS owns subscription state and tenant access.");
+    return;
+  }
+
   console.log(`[grace-cleanup] Started (checks every ${CHECK_INTERVAL_MS / 3600000}h, grace period: ${GRACE_PERIOD_DAYS} days)`);
 
   cleanupExpiredTenants();

@@ -26,6 +26,33 @@
 - [ ] Onboarding creates a tenant with the provided organization name
 - [ ] Logout clears the session and redirects to the login page
 
+## OperatorOS Entitlements And Billing Authority
+
+- [ ] `GET /api/me/entitlements` returns the current OperatorOS snapshot, `lastSyncAt`, and an OperatorOS billing URL
+- [ ] OperatorOS-managed user with missing `entitlement_snapshot_json` is blocked
+- [ ] Missing OperatorOS feature keys do not get inferred from `plan_slug` or local plan defaults
+- [ ] Missing OperatorOS limit values block limit-gated mutations instead of becoming unlimited
+- [ ] Revoked user (`target_module_enabled=false` or `module_role=none`) is blocked and sessions are killed
+- [ ] `past_due`, `unpaid`, and `canceled` snapshots block protected writes/features
+- [ ] `active` and `trialing` snapshots allow protected writes/features
+- [ ] `target_module_enabled=false` blocks access even when subscription status is active
+- [ ] Removing `api` from snapshot features blocks existing API tokens
+- [ ] Removing `portal`, `status`, `webhooks`, `reports`, or `intake` blocks the matching module routes
+- [ ] Public status pages return unavailable/blocked responses when the tenant lacks the `status` feature
+- [ ] Public secure-intake links return unavailable/blocked responses when the tenant lacks the `intake` feature
+- [ ] `POST /api/billing/checkout-session` returns `410 Gone` with `managed_by_operatoros`
+- [ ] `POST /api/billing/customer-portal` returns `410 Gone` with `managed_by_operatoros`
+- [ ] `PATCH /api/admin/tenants/:tenantId/subscription` returns `410 Gone`
+- [ ] `POST /api/admin/tenants/:tenantId/pause` returns `410 Gone`
+- [ ] `POST /api/admin/tenants/:tenantId/unpause` returns `410 Gone`
+- [ ] Admin panel shows read-only OperatorOS Tenant ID, plan, subscription status, Tech Deck access level, enabled features, last sync, local role, and revoked status
+- [ ] Admin panel does not show local plan/status mutation controls
+- [ ] Billing page is read-only and links to OperatorOS
+- [ ] Landing/pricing pages do not use local `/register`, local checkout, local plan prices, "free plan", or "no credit card required" as the primary funnel
+- [ ] `ENABLE_LEGACY_STRIPE_WEBHOOK_AUDIT` is unset by default and `/api/stripe/webhook` is not registered
+- [ ] When legacy Stripe webhook audit is explicitly enabled, webhook events do not update `tenant_subscriptions`, `paused_at`, or entitlement snapshots
+- [ ] `ENABLE_LEGACY_BILLING_GRACE_CLEANUP` is unset by default and cannot delete local paused tenants in production
+
 ## Core Module
 
 - [ ] Dashboard loads and displays stats cards (evidence count, client count, etc.)

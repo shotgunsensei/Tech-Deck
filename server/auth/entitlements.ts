@@ -1,12 +1,11 @@
-/**
- * OperatorOS entitlement snapshot — the per-user, per-login authoritative
+﻿/**
+ * OperatorOS entitlement snapshot â€” the per-user, per-login authoritative
  * record of what this user can do in Tech Deck. Persisted on
  * `users.entitlement_snapshot_json` and refreshed on every SSO login and
  * server-to-server sync.
- *
- * This module also owns the role-mapping table and the fallback
- * access-level → feature/limit defaults used when OperatorOS doesn't
- * explicitly itemize features or limits in the JWT.
+ * This module also owns the role-mapping table. OperatorOS-supplied
+ * feature and limit claims are preserved as the access authority; Tech Deck
+ * must not infer module access from local plan names.
  */
 
 export type SubscriptionStatus =
@@ -44,13 +43,8 @@ export interface EntitlementSnapshot {
   syncedAt: string;
 }
 
-const FEATURE_DEFAULTS: Record<string, string[]> = {
-  basic: ["intake"],
-  pro: ["api", "portal", "status", "webhooks", "reports", "intake"],
-  msp: ["api", "portal", "status", "webhooks", "reports", "intake"],
-  enterprise: ["api", "portal", "status", "webhooks", "reports", "intake"],
-};
-
+// Legacy migration fallback only. Production snapshots must carry explicit
+// OperatorOS limit values.
 const LIMIT_DEFAULTS: Record<string, EntitlementLimits> = {
   basic: {
     usersMax: 1,
@@ -90,10 +84,6 @@ const LIMIT_DEFAULTS: Record<string, EntitlementLimits> = {
   },
 };
 
-export function defaultFeaturesFor(accessLevel: string): string[] {
-  return FEATURE_DEFAULTS[accessLevel.toLowerCase()] ?? FEATURE_DEFAULTS.basic;
-}
-
 export function defaultLimitsFor(accessLevel: string): EntitlementLimits {
   return LIMIT_DEFAULTS[accessLevel.toLowerCase()] ?? LIMIT_DEFAULTS.basic;
 }
@@ -103,16 +93,16 @@ export function defaultLimitsFor(accessLevel: string): EntitlementLimits {
  * Returns null when access should be denied entirely (module_role=none).
  *
  * Mapping table (per spec point 5):
- *   module_role=none                                  → null (deny)
+ *   module_role=none                                  â†’ null (deny)
  *   tenant_role=owner|tenant_admin OR
- *     module_role=owner|module_admin|admin             → ADMIN
+ *     module_role=owner|module_admin|admin             â†’ ADMIN
  *     (OperatorOS-driven users never claim local OWNER;
  *      local OWNER is reserved for the legacy email/password
  *      account that originally created the workspace.)
- *   module_role=viewer                                → CLIENT (read-only)
- *   module_role=module_user|tech|technician|member    → TECH
- *   no recognised role at all                         → null (deny)
- *   anything else recognised                          → TECH (safe default)
+ *   module_role=viewer                                â†’ CLIENT (read-only)
+ *   module_role=module_user|tech|technician|member    â†’ TECH
+ *   no recognised role at all                         â†’ null (deny)
+ *   anything else recognised                          â†’ TECH (safe default)
  */
 export function mapOperatorOsRole(
   moduleRole: string | undefined,
@@ -130,7 +120,7 @@ export function mapOperatorOsRole(
   }
   if (mr === "viewer") return "CLIENT";
   if (mr === "module_user" || mr === "tech" || mr === "technician" || mr === "member") return "TECH";
-  // No recognised positive role and no tenant role → deny. Previously this
+  // No recognised positive role and no tenant role â†’ deny. Previously this
   // returned TECH which let unclaimed tokens slip through.
   if (!mr && !tr) return null;
   return "TECH";
@@ -166,11 +156,10 @@ export function buildSnapshot(input: BuildSnapshotInput): EntitlementSnapshot {
       ? status
       : "active") as SubscriptionStatus,
     accessLevel,
-    features:
-      Array.isArray(input.features) && input.features.length > 0
-        ? input.features.map((f) => f.toLowerCase())
-        : defaultFeaturesFor(accessLevel),
-    limits: { ...defaultLimitsFor(accessLevel), ...(input.limits || {}) },
+    features: Array.isArray(input.features)
+      ? input.features.map((f) => f.toLowerCase())
+      : [],
+    limits: { ...(input.limits || {}) },
     moduleRole: (input.moduleRole || "").toLowerCase(),
     tenantRole: input.tenantRole?.toLowerCase(),
     organizationId: input.organizationId,

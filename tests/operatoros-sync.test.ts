@@ -81,6 +81,8 @@ const validBody = {
   target_module_key: "techdeck",
   target_module_enabled: true,
   target_module_access_level: "pro",
+  target_module_features: ["api", "reports", "status"],
+  target_module_limits: { usersMax: 5, reportsPerMonth: 50 },
   plan_slug: "pro",
   subscription_status: "active",
   module_role: "module_admin",
@@ -162,6 +164,8 @@ describe("POST /api/operatoros/entitlements/sync", () => {
     expect(res.status).toBe(200);
     expect(res.body.code).toBe("ok");
     expect(res.body.snapshot.accessLevel).toBe("pro");
+    expect(res.body.snapshot.features).toEqual(["api", "reports", "status"]);
+    expect(res.body.snapshot.limits.usersMax).toBe(5);
     expect(res.body.snapshot.enabled).toBe(true);
     expect(res.body.sessionsKilled).toBe(0);
     expect(state.updateCalls[0].localRole).toBe("ADMIN");

@@ -9,6 +9,10 @@ import { queryClient } from "@/lib/queryClient";
 import { authFetch, clearCsrfToken } from "@/lib/csrf";
 import logoImage from "@assets/ShotgunNinjaVaulticon_1770412982737.png";
 
+const REQUEST_ACCESS_URL =
+  (import.meta.env.VITE_OPERATOROS_REQUEST_ACCESS_URL as string | undefined) ||
+  "mailto:hello@techdeck.app?subject=Tech%20Deck%20access";
+
 function PasswordStrength({ password }: { password: string }) {
   const checks = [
     { label: "8+ characters", met: password.length >= 8 },
@@ -102,8 +106,8 @@ export default function RegisterPage() {
           <div className="flex justify-center mb-2">
             <img src={logoImage} alt="Tech Deck" className="w-10 h-10 rounded-md object-cover" />
           </div>
-          <CardTitle className="text-xl" data-testid="text-register-title">Create Account</CardTitle>
-          <CardDescription>Start managing your IT operations</CardDescription>
+          <CardTitle className="text-xl" data-testid="text-register-title">Local Development Registration</CardTitle>
+          <CardDescription>Production access is granted through OperatorOS</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -192,7 +196,11 @@ export default function RegisterPage() {
               Create Account
             </Button>
             <p className="text-center text-sm text-muted-foreground">
-              Already have an account?{" "}
+              Need production access?{" "}
+              <a href={REQUEST_ACCESS_URL} className="text-primary hover:underline" data-testid="link-request-access">
+                Request access
+              </a>
+              {" or "}
               <Link href="/login" className="text-primary hover:underline" data-testid="link-login">
                 Sign in
               </Link>

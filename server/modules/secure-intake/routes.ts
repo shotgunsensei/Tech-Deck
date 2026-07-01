@@ -10,7 +10,7 @@ import { fileStorage } from "../../fileStorage";
 import { isAuthenticated } from "../../auth";
 import { requireTenant, requireRole } from "../../authz";
 import { requireNotPaused } from "../../core/middleware/requireNotPaused";
-import { requireFeature, checkLimit, getTenantPlanLimits } from "../../core/billing/enforcePlan";
+import { requireFeature, checkLimit, getTenantPlanLimits, checkTenantFeatureAccess } from "../../core/billing/enforcePlan";
 import { emitEvent } from "../../core/events/helpers";
 import type { PlanLimits } from "@shared/schema";
 
@@ -202,7 +202,7 @@ export function registerSecureIntakeRoutes(app: Express) {
     }
   });
 
-  app.post("/api/secure-intake/requests", ...intakeWriteTech, async (req: Request, res: Response) => {
+  app.post("/api/secure-intake/requests", ...intakeWriteTech, checkLimit("intakeRequestsPerMonth"), async (req: Request, res: Response) => {
     try {
       const { tenantId, userId } = (req as any).tenantCtx;
 
@@ -440,10 +440,10 @@ export function registerSecureIntakeRoutes(app: Express) {
         return res.status(410).json({ message: "This upload link has expired" });
       }
 
-      const tenantSub = await storage.getTenantSubscription(request.tenantId);
       const tenant = await storage.getTenantById(request.tenantId);
       if (!tenant) return res.status(410).json({ message: "This organization is no longer available" });
-      if (tenantSub?.status === "paused") return res.status(503).json({ message: "This service is temporarily unavailable. Please contact the organization." });
+      const access = await checkTenantFeatureAccess(request.tenantId, "intake");
+      if (!access.ok) return res.status(access.status).json({ message: "This service is temporarily unavailable. Please contact the organization.", error: access.error });
 
       const space = await storage.getIntakeSpaceById(request.tenantId, request.spaceId);
       if (!space || space.status !== "active") return res.status(410).json({ message: "This intake space is no longer available" });
@@ -483,8 +483,8 @@ export function registerSecureIntakeRoutes(app: Express) {
 
       const tenant = await storage.getTenantById(request.tenantId);
       if (!tenant) return res.status(410).json({ message: "This organization is no longer available" });
-      const tenantSub = await storage.getTenantSubscription(request.tenantId);
-      if (tenantSub?.status === "paused") return res.status(503).json({ message: "This service is temporarily unavailable" });
+      const access = await checkTenantFeatureAccess(request.tenantId, "intake");
+      if (!access.ok) return res.status(access.status).json({ message: "This service is temporarily unavailable", error: access.error });
 
       const body = z.object({ password: z.string().min(1) }).parse(req.body);
       const valid = await bcrypt.compare(body.password, request.passwordHash);
@@ -514,8 +514,8 @@ export function registerSecureIntakeRoutes(app: Express) {
       const tenant = await storage.getTenantById(request.tenantId);
       if (!tenant) return res.status(410).json({ message: "This organization is no longer available" });
 
-      const tenantSub = await storage.getTenantSubscription(request.tenantId);
-      if (tenantSub?.status === "paused") return res.status(503).json({ message: "This service is temporarily unavailable" });
+      const access = await checkTenantFeatureAccess(request.tenantId, "intake");
+      if (!access.ok) return res.status(access.status).json({ message: "This service is temporarily unavailable", error: access.error });
 
       if (request.requiresPassword && request.passwordHash) {
         const password = req.body?.password || req.headers["x-upload-password"];

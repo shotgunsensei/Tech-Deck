@@ -9,6 +9,7 @@ import crypto from "crypto";
 import archiver from "archiver";
 import { emitEvent } from "../../core/events/helpers";
 import { requireNotPaused } from "../../core/middleware/requireNotPaused";
+import { checkLimit } from "../../core/billing/enforcePlan";
 
 const ALLOWED_EXTENSIONS = ["png", "jpg", "jpeg", "pdf", "txt", "log", "csv", "json"];
 
@@ -118,6 +119,7 @@ export function registerEvidenceRoutes(app: Express) {
     isAuthenticated,
     requireTenant(),
     requireNotPaused(),
+    checkLimit("storageGb"),
     upload.single("file"),
     async (req: any, res) => {
       try {
@@ -132,12 +134,6 @@ export function registerEvidenceRoutes(app: Express) {
           if (!canUpload) {
             return res.status(403).json({ message: "You do not have upload permission for this client" });
           }
-        }
-
-        const tenant = await storage.getTenantById(tenantId);
-        const stats = await storage.getDashboardStats(tenantId);
-        if (tenant && stats.totalEvidence >= tenant.maxEvidence) {
-          return res.status(400).json({ message: "Evidence limit reached. Upgrade your plan." });
         }
 
         const file = req.file;
