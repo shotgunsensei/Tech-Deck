@@ -11,6 +11,7 @@ describe("TechDeck operations workspace contracts", () => {
   const schema = source("shared/schema.ts");
   const routes = source("server/modules/operations/routes.ts");
   const app = source("client/src/App.tsx");
+  const inventory = source("client/src/modules/operations/pages/inventory-workspace.tsx");
 
   it("persists the core tenant-scoped operations primitives", () => {
     for (const table of [
@@ -69,5 +70,21 @@ describe("TechDeck operations workspace contracts", () => {
   it("creates a revision in the same transaction as each document create or update", () => {
     expect(routes.match(/db\.transaction/g)?.length).toBe(2);
     expect(routes.match(/documentationRevisions/g)?.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("enforces tenant-owned folders and document visibility on indirect operations", () => {
+    expect(routes).toContain("validDocumentationFolder");
+    expect(routes).toContain("eq(documentationFolders.tenantId, req.tenantCtx.tenantId)");
+    expect(routes).toContain("canViewDocument(req.tenantCtx.role, current.minimumRole)");
+    expect(routes).toContain("backlinkCandidates.filter");
+    expect(routes).toContain("canViewDocument(req.tenantCtx.role, parent[0].minimumRole)");
+  });
+
+  it("exposes create/update inventory and contact import workflows", () => {
+    expect(inventory).toContain('editingId ? "PATCH" : "POST"');
+    expect(inventory).toContain('editingContactId ? "PATCH" : "POST"');
+    expect(inventory).toContain('<SelectItem value="contacts">Client contacts</SelectItem>');
+    expect(routes).toContain("client_id was not found in this tenant");
+    expect(routes).toContain('throw new Error("Duplicate record")');
   });
 });

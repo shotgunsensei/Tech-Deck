@@ -4,6 +4,8 @@
 
 - [ ] `npm install` completes without errors
 - [ ] `npm run db:push` completes without errors
+- [ ] `npm test` completes without errors
+- [ ] `TEST_DATABASE_URL=<disposable-postgres-url> npm run test:operations:db` completes without errors
 - [ ] `npm run build` completes without errors
 - [ ] `npm run dev` starts without errors on port 5000
 
@@ -63,6 +65,18 @@
 - [ ] Client Access page (OWNER/ADMIN) assigns CLIENT users to specific clients
 - [ ] Audit Log page displays filterable event log
 - [ ] Settings page loads tenant settings
+
+## Infrastructure and Documentation
+
+- [ ] `/inventory` creates and edits a tenant-scoped configuration item
+- [ ] `/network` creates VLAN, subnet, firewall, switch, AP, WAN, and IP records
+- [ ] Item detail links relationships and Evidence Vault attachments
+- [ ] Contacts can be created, site-associated, edited, and imported from validated CSV
+- [ ] CSV preview reports invalid tenant IDs, site/client mismatches, duplicates, and row-level errors
+- [ ] `/documentation` creates folders, runbooks, procedures, and immutable revisions
+- [ ] Technician cannot view, downgrade, backlink-discover, or mutate an OWNER/ADMIN-restricted document
+- [ ] A second tenant cannot retrieve an item or associate its client/folder IDs
+- [ ] `/lifecycle` shows licenses, certificates, warranties, and 90-day due dates
 
 ## Evidence Module
 

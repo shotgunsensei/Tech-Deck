@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle, ArrowRightLeft, Cable, CalendarClock, CheckCircle2, Database,
-  FileUp, Filter, KeyRound, Link2, Network, Plus, Search, Server, ShieldCheck,
+  FileUp, Filter, KeyRound, Link2, Network, Pencil, Plus, Search, Server, ShieldCheck,
   Trash2, UserRound, Users, X,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -64,6 +64,34 @@ function dueDate(item: ConfigurationItem) {
   return item.expirationDate || item.renewalDate || item.warrantyEndDate;
 }
 
+function dateInput(value?: string | null) {
+  return value ? new Date(value).toISOString().slice(0, 10) : "";
+}
+
+function itemForm(item: ConfigurationItem) {
+  return {
+    name: item.name,
+    itemType: item.itemType,
+    status: item.status,
+    clientId: item.clientId || "none",
+    siteId: item.siteId || "none",
+    owner: item.owner || "",
+    vendor: item.vendor || "",
+    product: item.product || "",
+    model: item.model || "",
+    serialNumber: item.serialNumber || "",
+    ipAddress: item.ipAddress || "",
+    macAddress: item.macAddress || "",
+    externalVaultReference: item.externalVaultReference || "",
+    expirationDate: dateInput(item.expirationDate),
+    renewalDate: dateInput(item.renewalDate),
+    warrantyEndDate: dateInput(item.warrantyEndDate),
+    tags: item.tags.join(", "),
+    details: Object.entries(item.details || {}).map(([key, value]) => `${key}=${value ?? ""}`).join("\n"),
+    notes: item.notes || "",
+  };
+}
+
 export default function InventoryWorkspace({ mode = "inventory" }: { mode?: InventoryMode }) {
   const config = modeConfig[mode];
   const Icon = config.icon;
@@ -71,15 +99,20 @@ export default function InventoryWorkspace({ mode = "inventory" }: { mode?: Inve
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState({ ...emptyItem, itemType: config.types[0] });
   const [relationshipTarget, setRelationshipTarget] = useState("");
   const [relationshipType, setRelationshipType] = useState("depends_on");
   const [selectedEvidence, setSelectedEvidence] = useState("");
   const [contactOpen, setContactOpen] = useState(false);
+  const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const [contact, setContact] = useState({ clientId: "", siteId: "none", name: "", title: "", email: "", phone: "", contactType: "technical", notes: "" });
   const [csv, setCsv] = useState("");
   const [preview, setPreview] = useState<any>(null);
+  const [importKind, setImportKind] = useState<"items" | "contacts">("items");
+
+  const activeImportKind = mode === "network" ? "ip_records" : importKind;
 
   const params = new URLSearchParams();
   if (mode !== "inventory") params.set("group", mode);
@@ -95,7 +128,8 @@ export default function InventoryWorkspace({ mode = "inventory" }: { mode?: Inve
   const { data: evidence = [] } = useQuery<EvidenceItem[]>({ queryKey: ["/api/evidence"] });
   const { data: summary } = useQuery<OpsSummary>({ queryKey: ["/api/ops/summary"] });
 
-  const visibleSites = useMemo(() => sites.filter((site) => form.clientId === "none" || site.clientId === form.clientId), [sites, form.clientId]);
+  const visibleSites = useMemo(() => sites.filter((site) => site.clientId === form.clientId), [sites, form.clientId]);
+  const visibleContactSites = useMemo(() => sites.filter((site) => site.clientId === contact.clientId), [sites, contact.clientId]);
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: [itemUrl] });
@@ -103,9 +137,9 @@ export default function InventoryWorkspace({ mode = "inventory" }: { mode?: Inve
     queryClient.invalidateQueries({ queryKey: ["/api/ops/summary"] });
   };
 
-  const createItem = useMutation({
+  const saveItem = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/ops/items", {
+      const response = await apiRequest(editingId ? "PATCH" : "POST", editingId ? `/api/ops/items/${editingId}` : "/api/ops/items", {
         ...form,
         clientId: form.clientId === "none" ? null : form.clientId,
         siteId: form.siteId === "none" ? null : form.siteId,
@@ -118,10 +152,12 @@ export default function InventoryWorkspace({ mode = "inventory" }: { mode?: Inve
       return response.json();
     },
     onSuccess: (item: ConfigurationItem) => {
-      setCreateOpen(false); setForm({ ...emptyItem, itemType: config.types[0] }); setSelectedId(item.id); refresh();
-      toast({ title: "Configuration item created", description: `${item.name} is now part of the tenant inventory.` });
+      const updated = Boolean(editingId);
+      setCreateOpen(false); setEditingId(null); setForm({ ...emptyItem, itemType: config.types[0] }); setSelectedId(item.id); refresh();
+      queryClient.invalidateQueries({ queryKey: ["/api/ops/items", item.id] });
+      toast({ title: updated ? "Configuration item updated" : "Configuration item created", description: `${item.name} is saved in the tenant inventory.` });
     },
-    onError: (error: Error) => toast({ title: "Could not create item", description: error.message, variant: "destructive" }),
+    onError: (error: Error) => toast({ title: "Could not save item", description: error.message, variant: "destructive" }),
   });
 
   const deleteItem = useMutation({
@@ -142,23 +178,46 @@ export default function InventoryWorkspace({ mode = "inventory" }: { mode?: Inve
     onError: (error: Error) => toast({ title: "Attachment failed", description: error.message, variant: "destructive" }),
   });
 
-  const createContact = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/ops/contacts", { ...contact, siteId: contact.siteId === "none" ? null : contact.siteId, title: nullable(contact.title), email: nullable(contact.email), phone: nullable(contact.phone), notes: nullable(contact.notes) }),
-    onSuccess: () => { setContactOpen(false); setContact({ clientId: "", siteId: "none", name: "", title: "", email: "", phone: "", contactType: "technical", notes: "" }); queryClient.invalidateQueries({ queryKey: ["/api/ops/contacts"] }); toast({ title: "Contact added" }); },
-    onError: (error: Error) => toast({ title: "Could not add contact", description: error.message, variant: "destructive" }),
+  const saveContact = useMutation({
+    mutationFn: () => apiRequest(editingContactId ? "PATCH" : "POST", editingContactId ? `/api/ops/contacts/${editingContactId}` : "/api/ops/contacts", { ...contact, siteId: contact.siteId === "none" ? null : contact.siteId, title: nullable(contact.title), email: nullable(contact.email), phone: nullable(contact.phone), notes: nullable(contact.notes) }),
+    onSuccess: () => { const updated = Boolean(editingContactId); setContactOpen(false); setEditingContactId(null); setContact({ clientId: "", siteId: "none", name: "", title: "", email: "", phone: "", contactType: "technical", notes: "" }); queryClient.invalidateQueries({ queryKey: ["/api/ops/contacts"] }); toast({ title: updated ? "Contact updated" : "Contact added" }); },
+    onError: (error: Error) => toast({ title: "Could not save contact", description: error.message, variant: "destructive" }),
   });
+
+  const editItem = (item: ConfigurationItem) => {
+    setSelectedId(null);
+    setEditingId(item.id);
+    setForm(itemForm(item));
+    setCreateOpen(true);
+  };
+
+  const editContact = (record: ContactRecord) => {
+    setEditingContactId(record.id);
+    setContact({
+      clientId: record.clientId,
+      siteId: record.siteId || "none",
+      name: record.name,
+      title: record.title || "",
+      email: record.email || "",
+      phone: record.phone || "",
+      contactType: record.contactType,
+      notes: record.notes || "",
+    });
+    setContactOpen(true);
+  };
 
   const previewImport = async () => {
     try {
-      const response = await apiRequest("POST", "/api/ops/import/preview", { kind: mode === "network" ? "ip_records" : "items", csv });
+      const response = await apiRequest("POST", "/api/ops/import/preview", { kind: activeImportKind, csv });
       setPreview(await response.json());
     } catch (error: any) { toast({ title: "Preview failed", description: error.message, variant: "destructive" }); }
   };
   const commitImport = async () => {
     try {
       const rows = preview.rows.filter((row: any) => !row.errors.length && !row.duplicate).map((row: any) => row.data);
-      const response = await apiRequest("POST", "/api/ops/import/commit", { kind: mode === "network" ? "ip_records" : "items", rows });
+      const response = await apiRequest("POST", "/api/ops/import/commit", { kind: activeImportKind, rows });
       const result = await response.json(); setPreview(null); setCsv(""); refresh();
+      if (activeImportKind === "contacts") queryClient.invalidateQueries({ queryKey: ["/api/ops/contacts"] });
       toast({ title: `${result.imported} rows imported`, description: result.errors.length ? `${result.errors.length} rows need attention.` : "All records were created." });
     } catch (error: any) { toast({ title: "Import failed", description: error.message, variant: "destructive" }); }
   };
@@ -174,10 +233,10 @@ export default function InventoryWorkspace({ mode = "inventory" }: { mode?: Inve
             <p className="mt-2 text-sm text-muted-foreground">{config.subtitle}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-              <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" />New record</Button></DialogTrigger>
+            <Dialog open={createOpen} onOpenChange={(open) => { setCreateOpen(open); if (!open) { setEditingId(null); setForm({ ...emptyItem, itemType: config.types[0] }); } }}>
+              <DialogTrigger asChild><Button onClick={() => { setEditingId(null); setForm({ ...emptyItem, itemType: config.types[0] }); }}><Plus className="h-4 w-4 mr-2" />New record</Button></DialogTrigger>
               <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader><DialogTitle>Create configuration record</DialogTitle><DialogDescription>Store operational metadata only. Passwords, tokens, and private keys must remain in an external vault.</DialogDescription></DialogHeader>
+                <DialogHeader><DialogTitle>{editingId ? "Edit configuration record" : "Create configuration record"}</DialogTitle><DialogDescription>Store operational metadata only. Passwords, tokens, and private keys must remain in an external vault.</DialogDescription></DialogHeader>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field label="Name"><Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></Field>
                   <Field label="Type"><Select value={form.itemType} onValueChange={(value) => setForm({ ...form, itemType: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{config.types.map((type) => <SelectItem key={type} value={type}>{pretty(type)}</SelectItem>)}</SelectContent></Select></Field>
@@ -199,7 +258,7 @@ export default function InventoryWorkspace({ mode = "inventory" }: { mode?: Inve
                   <div className="sm:col-span-2"><Field label="Technical details (one key=value per line)"><Textarea value={form.details} placeholder="gateway=10.20.0.1\nvlan_id=20\nsubnet=10.20.0.0/24" onChange={(event) => setForm({ ...form, details: event.target.value })} /></Field></div>
                   <div className="sm:col-span-2"><Field label="Notes"><Textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></Field></div>
                 </div>
-                <DialogFooter><Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button><Button disabled={!form.name || createItem.isPending} onClick={() => createItem.mutate()}>{createItem.isPending ? "Creating…" : "Create record"}</Button></DialogFooter>
+                <DialogFooter><Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button><Button disabled={!form.name || saveItem.isPending} onClick={() => saveItem.mutate()}>{saveItem.isPending ? "Saving…" : editingId ? "Save changes" : "Create record"}</Button></DialogFooter>
               </DialogContent>
             </Dialog>
           </div>
@@ -243,16 +302,22 @@ export default function InventoryWorkspace({ mode = "inventory" }: { mode?: Inve
         </TabsContent>
 
         {mode === "inventory" && <TabsContent value="contacts" className="mt-4 space-y-3">
-          <div className="flex justify-end"><Dialog open={contactOpen} onOpenChange={setContactOpen}><DialogTrigger asChild><Button><UserRound className="h-4 w-4 mr-2" />Add contact</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>Add client contact</DialogTitle><DialogDescription>Contacts remain tenant-scoped and associated to a client.</DialogDescription></DialogHeader><div className="space-y-4">
+          <div className="flex justify-end"><Dialog open={contactOpen} onOpenChange={(open) => { setContactOpen(open); if (!open) { setEditingContactId(null); setContact({ clientId: "", siteId: "none", name: "", title: "", email: "", phone: "", contactType: "technical", notes: "" }); } }}><DialogTrigger asChild><Button onClick={() => setEditingContactId(null)}><UserRound className="h-4 w-4 mr-2" />Add contact</Button></DialogTrigger><DialogContent><DialogHeader><DialogTitle>{editingContactId ? "Edit client contact" : "Add client contact"}</DialogTitle><DialogDescription>Contacts remain tenant-scoped and associated to a client and site.</DialogDescription></DialogHeader><div className="space-y-4">
             <Field label="Client"><Select value={contact.clientId} onValueChange={(value) => setContact({ ...contact, clientId: value, siteId: "none" })}><SelectTrigger><SelectValue placeholder="Choose client" /></SelectTrigger><SelectContent>{clients.map((client) => <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>)}</SelectContent></Select></Field>
+            <Field label="Site"><Select value={contact.siteId} onValueChange={(value) => setContact({ ...contact, siteId: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">No site</SelectItem>{visibleContactSites.map((site) => <SelectItem key={site.id} value={site.id}>{site.name}</SelectItem>)}</SelectContent></Select></Field>
             <Field label="Name"><Input value={contact.name} onChange={(event) => setContact({ ...contact, name: event.target.value })} /></Field>
             <div className="grid grid-cols-2 gap-3"><Field label="Title"><Input value={contact.title} onChange={(event) => setContact({ ...contact, title: event.target.value })} /></Field><Field label="Type"><Select value={contact.contactType} onValueChange={(value) => setContact({ ...contact, contactType: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{["primary", "technical", "billing", "emergency", "vendor"].map((type) => <SelectItem key={type} value={type}>{pretty(type)}</SelectItem>)}</SelectContent></Select></Field></div>
-            <Field label="Email"><Input type="email" value={contact.email} onChange={(event) => setContact({ ...contact, email: event.target.value })} /></Field><Field label="Phone"><Input value={contact.phone} onChange={(event) => setContact({ ...contact, phone: event.target.value })} /></Field>
-          </div><DialogFooter><Button disabled={!contact.clientId || !contact.name || createContact.isPending} onClick={() => createContact.mutate()}>Add contact</Button></DialogFooter></DialogContent></Dialog></div>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{contacts.map((record) => <Card key={record.id}><CardContent className="p-4"><div className="flex items-start justify-between"><div><p className="font-semibold">{record.name}</p><p className="text-xs text-muted-foreground">{record.title || pretty(record.contactType)}</p></div><Badge variant="outline">{pretty(record.contactType)}</Badge></div><div className="mt-4 space-y-1 text-sm"><p>{record.clientName}</p><p className="text-muted-foreground">{record.email || "No email"}</p><p className="text-muted-foreground">{record.phone || "No phone"}</p></div></CardContent></Card>)}</div>
+            <Field label="Email"><Input type="email" value={contact.email} onChange={(event) => setContact({ ...contact, email: event.target.value })} /></Field><Field label="Phone"><Input value={contact.phone} onChange={(event) => setContact({ ...contact, phone: event.target.value })} /></Field><Field label="Notes"><Textarea value={contact.notes} onChange={(event) => setContact({ ...contact, notes: event.target.value })} /></Field>
+          </div><DialogFooter><Button disabled={!contact.clientId || !contact.name || saveContact.isPending} onClick={() => saveContact.mutate()}>{saveContact.isPending ? "Saving…" : editingContactId ? "Save changes" : "Add contact"}</Button></DialogFooter></DialogContent></Dialog></div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{contacts.map((record) => <Card key={record.id} className="cursor-pointer transition-colors hover:border-primary/40" onClick={() => editContact(record)}><CardContent className="p-4"><div className="flex items-start justify-between"><div><p className="font-semibold">{record.name}</p><p className="text-xs text-muted-foreground">{record.title || pretty(record.contactType)}</p></div><Badge variant="outline">{pretty(record.contactType)}</Badge></div><div className="mt-4 space-y-1 text-sm"><p>{record.clientName}{record.siteName ? ` · ${record.siteName}` : ""}</p><p className="text-muted-foreground">{record.email || "No email"}</p><p className="text-muted-foreground">{record.phone || "No phone"}</p></div><p className="mt-3 flex items-center gap-1 text-xs text-primary"><Pencil className="h-3 w-3" />Edit contact</p></CardContent></Card>)}</div>
         </TabsContent>}
 
-        <TabsContent value="import" className="mt-4"><Card><CardHeader><CardTitle className="text-base flex items-center gap-2"><FileUp className="h-4 w-4" />Validated CSV import</CardTitle></CardHeader><CardContent className="space-y-4"><p className="text-sm text-muted-foreground">Required columns: <code>name,item_type</code>. Optional: <code>client_id,site_id,status,vendor,product,model,serial_number,ip_address,mac_address,external_vault_reference,tags,notes</code>. Preview detects duplicates and row errors before anything is written.</p><Textarea className="min-h-52 font-mono text-xs" value={csv} onChange={(event) => { setCsv(event.target.value); setPreview(null); }} placeholder="name,item_type,client_id,site_id,ip_address,notes" /><div className="flex gap-2"><Button variant="outline" disabled={!csv} onClick={previewImport}>Preview validation</Button>{preview && <Button disabled={!preview.valid} onClick={commitImport}>Import {preview.valid} valid rows</Button>}</div>{preview && <div className="rounded-lg border p-4"><div className="flex flex-wrap gap-3 text-sm"><span>{preview.total} rows</span><span className="text-emerald-500">{preview.valid} valid</span><span className="text-amber-500">{preview.rows.filter((row: any) => row.duplicate).length} duplicates</span><span className="text-destructive">{preview.rows.filter((row: any) => row.errors.length).length} invalid</span></div><div className="mt-3 max-h-48 overflow-auto space-y-1 text-xs">{preview.rows.filter((row: any) => row.duplicate || row.errors.length).map((row: any) => <div key={row.row} className="font-mono">Row {row.row}: {row.duplicate ? "duplicate name" : row.errors.join(", ")}</div>)}</div></div>}</CardContent></Card></TabsContent>
+        <TabsContent value="import" className="mt-4"><Card><CardHeader><CardTitle className="text-base flex items-center gap-2"><FileUp className="h-4 w-4" />Validated CSV import</CardTitle></CardHeader><CardContent className="space-y-4">
+          {mode === "inventory" && <Field label="Import dataset"><Select value={importKind} onValueChange={(value: "items" | "contacts") => { setImportKind(value); setPreview(null); setCsv(""); }}><SelectTrigger className="max-w-sm"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="items">Infrastructure records</SelectItem><SelectItem value="contacts">Client contacts</SelectItem></SelectContent></Select></Field>}
+          {activeImportKind === "contacts" ? <p className="text-sm text-muted-foreground">Required columns: <code>client_id,name</code>. Optional: <code>site_id,title,email,phone,contact_type,notes</code>. Duplicate detection uses client, name, and email.</p> : <p className="text-sm text-muted-foreground">Required columns: <code>name,item_type</code>. Optional: <code>client_id,site_id,status,vendor,product,model,serial_number,ip_address,mac_address,external_vault_reference,tags,notes</code>. Preview verifies tenant-owned client/site IDs and reports duplicates before anything is written.</p>}
+          <Textarea className="min-h-52 font-mono text-xs" value={csv} onChange={(event) => { setCsv(event.target.value); setPreview(null); }} placeholder={activeImportKind === "contacts" ? "client_id,name,email,phone,contact_type" : "name,item_type,client_id,site_id,ip_address,notes"} />
+          <div className="flex gap-2"><Button variant="outline" disabled={!csv} onClick={previewImport}>Preview validation</Button>{preview && <Button disabled={!preview.valid} onClick={commitImport}>Import {preview.valid} valid rows</Button>}</div>{preview && <div className="rounded-lg border p-4"><div className="flex flex-wrap gap-3 text-sm"><span>{preview.total} rows</span><span className="text-emerald-500">{preview.valid} valid</span><span className="text-amber-500">{preview.rows.filter((row: any) => row.duplicate).length} duplicates</span><span className="text-destructive">{preview.rows.filter((row: any) => row.errors.length).length} invalid</span></div><div className="mt-3 max-h-48 overflow-auto space-y-1 text-xs">{preview.rows.filter((row: any) => row.duplicate || row.errors.length).map((row: any) => <div key={row.row} className="font-mono">Row {row.row}: {row.duplicate ? "duplicate record" : row.errors.join(", ")}</div>)}</div></div>}
+        </CardContent></Card></TabsContent>
       </Tabs>
 
       <Dialog open={Boolean(selectedId)} onOpenChange={(open) => !open && setSelectedId(null)}>
@@ -266,7 +331,7 @@ export default function InventoryWorkspace({ mode = "inventory" }: { mode?: Inve
               <Card><CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><ShieldCheck className="h-4 w-4" />Evidence attachments</CardTitle></CardHeader><CardContent className="space-y-3">{selected.attachments?.map((row) => <a key={row.attachment.id} href={`/evidence/${row.attachment.evidenceItemId}`} className="block rounded-md border px-3 py-2 text-sm hover:bg-muted"><strong>{row.evidenceTitle}</strong><div className="text-xs text-muted-foreground">{row.fileName}</div></a>)}<div className="grid grid-cols-[1fr_auto] gap-2"><Select value={selectedEvidence} onValueChange={setSelectedEvidence}><SelectTrigger><SelectValue placeholder="Choose evidence" /></SelectTrigger><SelectContent>{evidence.map((item) => <SelectItem key={item.id} value={item.id}>{item.title}</SelectItem>)}</SelectContent></Select><Button size="icon" disabled={!selectedEvidence || linkEvidence.isPending} onClick={() => linkEvidence.mutate()}><Plus className="h-4 w-4" /></Button></div></CardContent></Card>
             </div>
             {selected.notes && <div className="rounded-lg bg-muted/50 p-4 text-sm whitespace-pre-wrap">{selected.notes}</div>}
-            <DialogFooter><Button variant="destructive" onClick={() => deleteItem.mutate(selected.id)}><Trash2 className="h-4 w-4 mr-2" />Delete</Button><Button variant="outline" onClick={() => setSelectedId(null)}>Close</Button></DialogFooter>
+            <DialogFooter><Button variant="destructive" onClick={() => deleteItem.mutate(selected.id)}><Trash2 className="h-4 w-4 mr-2" />Delete</Button><Button variant="outline" onClick={() => editItem(selected)}><Pencil className="h-4 w-4 mr-2" />Edit</Button><Button variant="outline" onClick={() => setSelectedId(null)}>Close</Button></DialogFooter>
           </>}
         </DialogContent>
       </Dialog>

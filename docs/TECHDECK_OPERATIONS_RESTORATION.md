@@ -11,6 +11,8 @@ The restoration adds a tenant-scoped operations graph and versioned documentatio
 - `/documentation` — folders, documentation pages, runbooks, procedures, knowledge articles, Markdown content, cross-links, backlinks, role restrictions, evidence attachments, export, and revision history.
 - `/lifecycle` — licenses, certificates, warranties, expiration dates, renewal dates, assigned-system relationships, and 90-day dashboard alerts.
 
+Inventory and contact records can be created and edited from the workspace. Contact forms include client/site association, and the import tab supports infrastructure, contact, and IP/subnet datasets with an explicit preview before commit.
+
 ## Recovered components
 
 Git history and all available branches were inspected before implementation. There was one branch (`main`) and no deleted historical network/documentation module to restore. The real recoverable product was the existing MSP platform in the current tree. The restoration reuses and preserves:
@@ -105,7 +107,7 @@ Supported filters include `q`, `clientId`, `siteId`, `status`, `itemType`, and `
 - `POST /api/ops/import/preview`
 - `POST /api/ops/import/commit`
 
-Import kinds are `items`, `contacts`, and `ip_records`. Preview performs CSV parsing, row validation, duplicate-name detection, and returns row-level errors. Commit revalidates every row, checks tenant-owned client/site references, caps batches at 1,000 rows, audits the result, and returns row-level errors without hiding partial success.
+Import kinds are `items`, `contacts`, and `ip_records`. Preview normalizes headers, validates tenant-owned client/site IDs and client/site pairing, validates email and record types, detects both persisted and within-file duplicates, and returns row-level errors. Commit revalidates every row, rechecks duplicates to prevent preview/commit drift, caps batches at 1,000 rows, audits the result, and returns row-level errors without hiding partial success. IP imports accept DNS, DHCP, VLAN, subnet, private IP, and public IP record types.
 
 ## Security controls
 
@@ -116,6 +118,8 @@ Import kinds are `items`, `contacts`, and `ip_records`. Preview performs CSV par
 - `CLIENT` users cannot access the staff operations APIs or workspace routes.
 - Publishing and role-restricting documentation is limited to owners/admins.
 - Documentation list/detail/search/export filters by minimum role server-side.
+- Documentation folder/client associations are tenant-validated, and tenant predicates are repeated on relational joins as defense in depth.
+- Restricted documents cannot be downgraded or modified by a lower-role user who knows the record ID; backlinks and attachment mutations apply the same document visibility policy.
 - Documentation writes create an audit event and an immutable revision transactionally.
 - Configuration items reject detail keys matching password, passphrase, secret, token, API key, private key, or credential value.
 - Credential references require an external vault reference. TechDeck does not store or reveal secret values and never returns them from list APIs.
@@ -130,19 +134,20 @@ Completed locally on July 15, 2026:
 | Check | Result |
 |---|---|
 | `npm run check` | Passed |
-| `npx vitest run` | 15 files, 152 tests passed |
+| `npm test` | 15 files, 155 tests passed |
+| `TEST_DATABASE_URL=<isolated-postgres-url> npm run test:operations:db` | 2 files, 5 database integration tests passed |
 | `npm run build` | Passed; Vite client and bundled Express server produced |
 | `npm run db:push` against PostgreSQL 16 | Passed; schema applied successfully |
-| Persistence probe | 2 configuration items, 1 relationship, 1 document, and 1 revision persisted |
-| Tenant isolation probe | Random second tenant returned 0 configuration items |
+| Persistence probe | Configuration items, relationships, documents, revisions, and imports persisted across API reloads |
+| Tenant isolation probe | A second tenant's configuration item returned 404; cross-tenant client/folder associations were rejected |
 
-The automated suite now includes operations schema, route registration, authorization/tenant contracts, secret-field rejection, stored-XSS sanitization, primary UI route registration, and transactional revision coverage. Existing SSO, session revocation, OperatorOS entitlements, billing decommission, route navigation, and tenant invariants continue to pass.
+The automated suite now includes operations schema, route registration, authorization/tenant contracts, secret-field rejection, stored-XSS sanitization, primary UI route registration, transactional revision coverage, two-tenant database denial, restricted-document enforcement, relationship persistence, search, and import duplicate validation. A combined integration journey signs an OperatorOS-style launch JWT, consumes it through a mocked OperatorOS endpoint, provisions the tenant session, and creates/reloads/searches a client, site, server, firewall, VLAN, subnet, relationship, and published runbook. Existing SSO, session revocation, OperatorOS entitlements, billing decommission, and route-navigation coverage continues to pass.
 
 ## Deployment requirements
 
 1. Configure the existing TechDeck and OperatorOS environment variables documented in `docs/OPERATOROS_SSO.md` and `docs/OPERATOROS_ENTITLEMENTS.md`.
 2. Provide `DATABASE_URL` and run `npm run db:push` before deploying the new build.
-3. Run `npm run check`, `npx vitest run`, and `npm run build` in the deployment environment.
+3. Run `npm run check`, `npm test`, and `npm run build` in the deployment environment. Point `TEST_DATABASE_URL` at a disposable PostgreSQL database and run `npm run test:operations:db` for the persistence/isolation suite.
 4. Deploy the full Express application. This is not a static-only site; SSO, sessions, APIs, tenant enforcement, PostgreSQL, and file/evidence routes require the server.
 5. Keep OperatorOS as the only subscription and entitlement authority. Do not re-enable TechDeck-local billing mutations.
 6. Configure an approved external vault and store only its non-secret item URL/ID in `externalVaultReference` for credential references.
@@ -155,7 +160,7 @@ No new environment variables are required by the operations workspace itself.
 - Live OperatorOS launch, session renewal, revocation, and return navigation were not exercised in this local run because production SSO secrets and endpoints were not present. The existing 24-case SSO harness and all OperatorOS regression tests passed.
 - Lifecycle notifications are currently in-app dashboard alerts for the next 90 days. Email/SMS/webhook renewal delivery is not added in this restoration.
 - Documentation editing is portable Markdown with a safe text preview, not a WYSIWYG editor.
-- CSV preview/commit APIs support items, contacts, and IP records. The primary UI is optimized for item/IP CSV; contact import can use the same documented API until a dedicated mapping wizard is added.
+- CSV preview/commit and the primary UI support items, contacts, and IP records. Imports currently use canonical column names and tenant UUIDs; a name-to-ID mapping wizard is not included.
 - The configuration model uses typed records plus validated metadata so new infrastructure categories do not require new tables. Highly specialized forms (for example switch port matrices) use key/value technical details in this release.
 - A live browser end-to-end run through OperatorOS requires environment credentials. Route, auth, persistence, tenant, and production-build checks were completed locally; the deployment smoke checklist remains mandatory.
 
