@@ -21,6 +21,7 @@ import { registerReviewerRoutes } from "./modules/reviewer/routes";
 import { registerAccountRoutes } from "./modules/account/routes";
 import { registerItOpsRoutes } from "./modules/itops/routes";
 import { registerSecureIntakeRoutes } from "./modules/secure-intake/routes";
+import { registerOperationsRoutes } from "./modules/operations/routes";
 import { registerDemoRoutes } from "./modules/demo/routes";
 import { registerAuditSubscriber } from "./core/events/subscribers";
 import { startWebhookWorker } from "./modules/webhooks/worker";
@@ -192,6 +193,7 @@ export async function registerRoutes(
     registerRecurringRoutes(app);
     registerItOpsRoutes(app);
     registerSecureIntakeRoutes(app);
+    registerOperationsRoutes(app);
     registerDemoRoutes(app);
 
     startGraceCleanupJob();

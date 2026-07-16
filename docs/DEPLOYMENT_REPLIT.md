@@ -18,9 +18,15 @@ The following secrets must be configured in the Replit Secrets tab:
 | `PGPASSWORD` | PostgreSQL password | Yes (Replit DB) |
 | `PGDATABASE` | PostgreSQL database name | Yes (Replit DB) |
 | `SESSION_SECRET` | Express session signing key | Set manually |
-| `REPLIT_DOMAINS` | Replit domain for OIDC callback | Yes (Replit) |
-| `REPLIT_DEV_DOMAIN` | Replit dev domain for OIDC | Yes (Replit) |
-| `REPL_ID` | Replit project ID | Yes (Replit) |
+| `MODULE_SSO_SECRET` | Shared secret used to verify OperatorOS launch JWTs | No |
+| `OPERATOROS_SSO_AUDIENCE` | Expected TechDeck SSO audience | No |
+| `OPERATOROS_BASE_URL` | Canonical OperatorOS base URL and default issuer | No |
+| `OPERATOROS_API_URL` | OperatorOS API used to consume one-time SSO tokens | No |
+| `OPERATOROS_ISSUER` | Optional canonical issuer override | No |
+| `OPERATOROS_SSO_ENV` | Exact environment claim accepted by TechDeck | No |
+| `OPERATOROS_SERVICE_TOKEN` | Server-to-server SSO consume and entitlement sync token | No |
+| `CHILD_APP_MODULE_KEY` | Must be `techdeck` | No |
+| `OPERATOROS_BILLING_URL` | OperatorOS-managed billing URL | No |
 
 ## Optional Environment Variables
 
@@ -29,6 +35,7 @@ The following secrets must be configured in the Replit Secrets tab:
 | `API_ONLY` | Set to `"true"` to run as headless API server | `undefined` (full SPA mode) |
 | `PORT` | Server port | `5000` |
 | `NODE_ENV` | Runtime environment | `development` |
+| `VITE_OPERATOROS_URL` | OperatorOS recovery and return navigation URL | Falls back to `VITE_OPERATOROS_BASE_URL` |
 
 ## Database Setup
 
@@ -65,7 +72,7 @@ API_ONLY=true npm run dev
 ```
 
 In API-Only mode:
-- Session auth and Replit OIDC are disabled
+- Session auth and OperatorOS SSO are disabled
 - The SPA frontend is not served
 - Only `/api/v1/*` endpoints and `/health` are available
 - Bearer token authentication is required for protected endpoints
@@ -96,6 +103,7 @@ Available scopes: `evidence:read`, `license:validate`, `status:read`
 | Module | Mount Path | Description |
 |--------|-----------|-------------|
 | Core | `/api` | Tenants, users, teams, audit, settings |
+| Operations | `/api/ops` | Infrastructure, networks, contacts, relationships, documentation, lifecycle, imports |
 | Evidence | `/api/evidence` | File upload, search, preview |
 | License | `/api/license` | License products, keys, validation |
 | Webhooks | `/api/webhooks` | Outbound webhook delivery |

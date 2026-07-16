@@ -240,6 +240,196 @@ export const assetsRelations = relations(assets, ({ one, many }) => ({
   evidenceItems: many(evidenceItems),
 }));
 
+// TechDeck operational documentation and configuration inventory. These
+// records intentionally contain references and metadata only; secrets belong
+// in an external vault and are never accepted by this schema.
+export const contactRecords = pgTable(
+  "contact_records",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    clientId: varchar("client_id").references(() => clients.id, { onDelete: "cascade" }),
+    siteId: varchar("site_id").references(() => sites.id, { onDelete: "set null" }),
+    name: text("name").notNull(),
+    title: text("title"),
+    email: text("email"),
+    phone: text("phone"),
+    contactType: text("contact_type").notNull().default("technical"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_contact_record_tenant").on(table.tenantId),
+    index("idx_contact_record_client").on(table.tenantId, table.clientId),
+  ],
+);
+
+export const configurationItems = pgTable(
+  "configuration_items",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    clientId: varchar("client_id").references(() => clients.id, { onDelete: "set null" }),
+    siteId: varchar("site_id").references(() => sites.id, { onDelete: "set null" }),
+    name: text("name").notNull(),
+    itemType: text("item_type").notNull(),
+    status: text("status").notNull().default("active"),
+    owner: text("owner"),
+    vendor: text("vendor"),
+    product: text("product"),
+    model: text("model"),
+    serialNumber: text("serial_number"),
+    ipAddress: text("ip_address"),
+    macAddress: text("mac_address"),
+    externalVaultReference: text("external_vault_reference"),
+    expirationDate: timestamp("expiration_date"),
+    renewalDate: timestamp("renewal_date"),
+    warrantyEndDate: timestamp("warranty_end_date"),
+    details: jsonb("details").$type<Record<string, string | number | boolean | null>>().notNull().default({}),
+    tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
+    notes: text("notes"),
+    createdById: varchar("created_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_configuration_item_tenant").on(table.tenantId),
+    index("idx_configuration_item_type").on(table.tenantId, table.itemType),
+    index("idx_configuration_item_client").on(table.tenantId, table.clientId),
+    index("idx_configuration_item_expiration").on(table.tenantId, table.expirationDate),
+  ],
+);
+
+export const configurationRelationships = pgTable(
+  "configuration_relationships",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    sourceItemId: varchar("source_item_id").notNull().references(() => configurationItems.id, { onDelete: "cascade" }),
+    targetItemId: varchar("target_item_id").notNull().references(() => configurationItems.id, { onDelete: "cascade" }),
+    relationshipType: text("relationship_type").notNull().default("depends_on"),
+    notes: text("notes"),
+    createdById: varchar("created_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_configuration_relationship_tenant").on(table.tenantId),
+    uniqueIndex("idx_configuration_relationship_unique").on(
+      table.tenantId,
+      table.sourceItemId,
+      table.targetItemId,
+      table.relationshipType,
+    ),
+  ],
+);
+
+export const documentationFolders = pgTable(
+  "documentation_folders",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    clientId: varchar("client_id").references(() => clients.id, { onDelete: "cascade" }),
+    parentId: varchar("parent_id"),
+    name: text("name").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_documentation_folder_tenant").on(table.tenantId),
+    index("idx_documentation_folder_parent").on(table.tenantId, table.parentId),
+  ],
+);
+
+export const documentationPages = pgTable(
+  "documentation_pages",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    clientId: varchar("client_id").references(() => clients.id, { onDelete: "set null" }),
+    siteId: varchar("site_id").references(() => sites.id, { onDelete: "set null" }),
+    folderId: varchar("folder_id").references(() => documentationFolders.id, { onDelete: "set null" }),
+    pageType: text("page_type").notNull().default("documentation"),
+    title: text("title").notNull(),
+    slug: text("slug").notNull(),
+    summary: text("summary"),
+    content: text("content").notNull().default(""),
+    status: text("status").notNull().default("draft"),
+    category: text("category"),
+    minimumRole: text("minimum_role").notNull().default("TECH"),
+    tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
+    version: integer("version").notNull().default(1),
+    createdById: varchar("created_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+    updatedById: varchar("updated_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+    publishedAt: timestamp("published_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_documentation_page_tenant").on(table.tenantId),
+    index("idx_documentation_page_client").on(table.tenantId, table.clientId),
+    uniqueIndex("idx_documentation_page_slug").on(table.tenantId, table.slug),
+  ],
+);
+
+export const documentationRevisions = pgTable(
+  "documentation_revisions",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    pageId: varchar("page_id").notNull().references(() => documentationPages.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    title: text("title").notNull(),
+    summary: text("summary"),
+    content: text("content").notNull(),
+    status: text("status").notNull(),
+    changeNote: text("change_note"),
+    createdById: varchar("created_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_documentation_revision_page").on(table.tenantId, table.pageId),
+    uniqueIndex("idx_documentation_revision_version").on(table.pageId, table.version),
+  ],
+);
+
+export const operationalAttachments = pgTable(
+  "operational_attachments",
+  {
+    id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+    tenantId: varchar("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+    configurationItemId: varchar("configuration_item_id").references(() => configurationItems.id, { onDelete: "cascade" }),
+    documentationPageId: varchar("documentation_page_id").references(() => documentationPages.id, { onDelete: "cascade" }),
+    evidenceItemId: varchar("evidence_item_id").notNull().references(() => evidenceItems.id, { onDelete: "cascade" }),
+    label: text("label"),
+    createdById: varchar("created_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_operational_attachment_tenant").on(table.tenantId),
+    uniqueIndex("idx_operational_attachment_unique").on(
+      table.tenantId,
+      table.configurationItemId,
+      table.documentationPageId,
+      table.evidenceItemId,
+    ),
+  ],
+);
+
+export const insertContactRecordSchema = createInsertSchema(contactRecords).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertConfigurationItemSchema = createInsertSchema(configurationItems).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertConfigurationRelationshipSchema = createInsertSchema(configurationRelationships).omit({ id: true, createdAt: true });
+export const insertDocumentationFolderSchema = createInsertSchema(documentationFolders).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertDocumentationPageSchema = createInsertSchema(documentationPages).omit({ id: true, version: true, publishedAt: true, createdAt: true, updatedAt: true });
+
+export type ContactRecord = typeof contactRecords.$inferSelect;
+export type ConfigurationItem = typeof configurationItems.$inferSelect;
+export type ConfigurationRelationship = typeof configurationRelationships.$inferSelect;
+export type DocumentationFolder = typeof documentationFolders.$inferSelect;
+export type DocumentationPage = typeof documentationPages.$inferSelect;
+export type DocumentationRevision = typeof documentationRevisions.$inferSelect;
+export type OperationalAttachment = typeof operationalAttachments.$inferSelect;
+
 export const tags = pgTable(
   "tags",
   {

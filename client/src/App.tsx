@@ -62,6 +62,8 @@ const KbArticlePage = lazy(() => import("@/modules/kb").then(m => ({ default: m.
 const AccountSecurityPage = lazy(() => import("@/pages/account-security"));
 const RecurringTemplatesPage = lazy(() => import("@/modules/recurring").then(m => ({ default: m.RecurringTemplatesPage })));
 const ItOpsConsolePage = lazy(() => import("@/modules/itops").then(m => ({ default: m.ItOpsConsolePage })));
+const InventoryWorkspace = lazy(() => import("@/modules/operations").then(m => ({ default: m.InventoryWorkspace })));
+const DocumentationWorkspace = lazy(() => import("@/modules/operations").then(m => ({ default: m.DocumentationWorkspace })));
 
 const IntakeDashboardPage = lazy(() => import("@/modules/secure-intake").then(m => ({ default: m.IntakeDashboardPage })));
 const IntakeSpacesPage = lazy(() => import("@/modules/secure-intake").then(m => ({ default: m.IntakeSpacesPage })));
@@ -248,6 +250,10 @@ function AuthenticatedApp() {
                   {!isClient && <Route path="/clients/:id" component={ClientDetailPage} />}
                   {!isClient && <Route path="/sites" component={SitesPage} />}
                   {!isClient && <Route path="/assets" component={AssetsPage} />}
+                  {!isClient && <Route path="/inventory">{() => <InventoryWorkspace mode="inventory" />}</Route>}
+                  {!isClient && <Route path="/network">{() => <InventoryWorkspace mode="network" />}</Route>}
+                  {!isClient && <Route path="/lifecycle">{() => <InventoryWorkspace mode="lifecycle" />}</Route>}
+                  {!isClient && <Route path="/documentation" component={DocumentationWorkspace} />}
                   {!isClient && <Route path="/calendar" component={CalendarPage} />}
                   {!isClient && <Route path="/time" component={TimeEntriesPage} />}
                   {!isClient && <Route path="/kb" component={KbListPage} />}

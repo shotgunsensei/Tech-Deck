@@ -39,6 +39,34 @@ export const coreModule = manifest({
   roles: ["OWNER", "ADMIN", "TECH", "CLIENT"],
 });
 
+export const operationsModule = manifest({
+  id: "operations",
+  name: "Infrastructure & Documentation",
+  description: "Tenant-scoped configuration inventory, network documentation, contacts, relationships, lifecycle tracking, runbooks, procedures, folders, revisions, and evidence attachments.",
+  enabled: true,
+  category: "core",
+  version: "1.0.0",
+  server: {
+    mountPath: "/api/ops",
+    routesFile: "server/modules/operations/routes.ts",
+    emits: [
+      "configuration_item.created", "configuration_item.updated", "configuration_item.deleted",
+      "configuration_relationship.created", "configuration_relationship.deleted",
+      "documentation_page.created", "documentation_page.updated", "documentation_page.deleted",
+      "contact.created", "contact.updated", "contact.deleted", "operations.imported",
+    ],
+  },
+  client: {
+    navItems: [
+      { title: "Infrastructure", url: "/inventory", icon: "Server", roles: ["OWNER", "ADMIN", "TECH"] },
+      { title: "Network", url: "/network", icon: "Network", roles: ["OWNER", "ADMIN", "TECH"] },
+      { title: "Documentation", url: "/documentation", icon: "BookOpen", roles: ["OWNER", "ADMIN", "TECH"] },
+      { title: "Lifecycle", url: "/lifecycle", icon: "CalendarClock", roles: ["OWNER", "ADMIN", "TECH"] },
+    ],
+  },
+  roles: ["OWNER", "ADMIN", "TECH"],
+});
+
 export const ticketsModule = manifest({
   id: "tickets",
   name: "Tickets",
@@ -286,6 +314,7 @@ export const mobileModule = manifest({
 
 const allModules: VaultModuleManifest[] = [
   coreModule,
+  operationsModule,
   ticketsModule,
   calendarModule,
   timeModule,

@@ -8,14 +8,16 @@ Configure the child app with real values for the target environment:
 
 - `DATABASE_URL`
 - `SESSION_SECRET`
-- `OPERATOROS_SSO_SHARED_SECRET`
+- `MODULE_SSO_SECRET`
 - `OPERATOROS_SSO_AUDIENCE`
-- `OPERATOROS_SSO_ISSUER`
-- `OPERATOROS_SSO_RETURN_URL`
-- `OPERATOROS_ENTITLEMENTS_WEBHOOK_SECRET`
+- `OPERATOROS_BASE_URL`
+- `OPERATOROS_API_URL`
+- `OPERATOROS_ISSUER`
+- `OPERATOROS_SSO_ENV`
+- `OPERATOROS_SERVICE_TOKEN`
+- `CHILD_APP_MODULE_KEY=techdeck`
 - `OPERATOROS_BILLING_URL`
-- `VITE_OPERATOROS_BASE_URL`
-- `VITE_OPERATOROS_REQUEST_ACCESS_URL`
+- `VITE_OPERATOROS_URL`
 
 Do not configure Tech Deck-local Stripe plan mutation as the production subscription authority. Local billing write endpoints should remain decommissioned and return `410`.
 

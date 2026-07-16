@@ -15,6 +15,9 @@ import {
   Receipt,
   ShieldCheck,
   Terminal,
+  Network,
+  BookOpen,
+  CalendarClock,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,6 +29,7 @@ import { useState } from "react";
 import type { DashboardStats, TenantWithMember, EvidenceWithRelations } from "@/lib/types";
 import type { Client } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
+import type { OpsSummary } from "@/modules/operations/types";
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return bytes + " B";
@@ -333,6 +337,11 @@ export default function DashboardPage() {
     staleTime: 60_000,
   });
 
+  const { data: opsSummary } = useQuery<OpsSummary>({
+    queryKey: ["/api/ops/summary"],
+    enabled: roleResolved && !isClient,
+  });
+
   if (tenantLoading || !roleResolved) {
     return <DashboardSkeleton />;
   }
@@ -479,6 +488,28 @@ export default function DashboardPage() {
           icon={Server}
           href="/assets"
         />
+        <StatCard
+          title="Infrastructure"
+          value={opsSummary?.totalItems || 0}
+          icon={Network}
+          href="/inventory"
+          helper="Configuration graph"
+        />
+        <StatCard
+          title="Documentation"
+          value={opsSummary?.totalDocuments || 0}
+          icon={BookOpen}
+          href="/documentation"
+          helper="Runbooks and procedures"
+        />
+        <StatCard
+          title="Lifecycle Due"
+          value={opsSummary?.dueItems.length || 0}
+          icon={CalendarClock}
+          href="/lifecycle"
+          tone={(opsSummary?.dueItems.length || 0) > 0 ? "risk" : "success"}
+          helper="Next 90 days"
+        />
         <Card className="metric-card hover-elevate cursor-pointer" onClick={() => window.location.href = "/invoices"}>
           <CardContent className="p-4">
             <div className="flex items-start justify-between gap-4">
@@ -595,6 +626,18 @@ export default function DashboardPage() {
             <Link href="/itops">
               <Terminal className="w-4 h-4 mr-1" />
               Open IT Ops Console
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="w-full justify-start">
+            <Link href="/inventory">
+              <Server className="w-4 h-4 mr-1" />
+              Add Infrastructure Record
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="w-full justify-start">
+            <Link href="/documentation">
+              <BookOpen className="w-4 h-4 mr-1" />
+              Write Runbook or Procedure
             </Link>
           </Button>
           <Button asChild variant="outline" className="w-full justify-start" data-testid="button-next-secure-intake">

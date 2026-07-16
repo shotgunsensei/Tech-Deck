@@ -75,6 +75,9 @@ This document maps the SPA routes in `client/src/App.tsx` and the Express routes
 | `server/modules/account/routes.ts` | `GET /api/account/info`, `DELETE /api/account` | `isAuthenticated` | User scoped | None | None | Read/write | Account deletion |
 | `server/modules/reviewer/routes.ts` | `POST /api/reviewer-login` | HTTPS + CSRF + reviewer secret | None | Reviewer policy | None | Auth write | Reviewer login |
 | `server/modules/demo/routes.ts` | Demo/reset routes | `isAuthenticated` | `requireTenant` | `requireRole(OWNER, ADMIN)` | None | Write | Demo tooling |
+| `server/modules/operations/routes.ts` | `GET /api/ops/summary`, search, items, contacts, folders, documents, document detail/export | `isAuthenticated` | Every query uses `req.tenantCtx.tenantId` | `requireRole(OWNER, ADMIN, TECH)` plus document `minimumRole` | None | Read | Dashboard, Infrastructure, Network, Documentation, Lifecycle, Client detail |
+| `server/modules/operations/routes.ts` | Configuration/contact/document/folder CRUD, relationships, evidence attachments | `isAuthenticated` | Tenant-owned client/site/parent/evidence checks | Staff writes; destructive deletes and document publish/restriction use admin/owner gates | `requireNotPaused` | Write | Operations workspaces |
+| `server/modules/operations/routes.ts` | `POST /api/ops/import/preview`, `POST /api/ops/import/commit` | `isAuthenticated` | Row client/site references tenant-checked | `requireRole(OWNER, ADMIN, TECH)` | Commit uses `requireNotPaused` | Read/write | Validated CSV import |
 
 ## Known Route Contracts
 

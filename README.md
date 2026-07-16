@@ -2,7 +2,7 @@
 
 **The IT operations cockpit for MSPs and senior technical teams.**
 
-A multi-tenant SaaS platform that centralizes tickets, scripts, evidence, automation, and technician workflows. Built for managed service providers, internal IT teams, and solo technicians who are tired of stitching together five disconnected tools.
+A multi-tenant SaaS platform that centralizes IT documentation, infrastructure inventory, networks, runbooks, tickets, scripts, evidence, automation, and technician workflows. Built for managed service providers, internal IT teams, and solo technicians who are tired of stitching together disconnected tools.
 
 > Tech Deck is part of the **Shotgun Ninjas Productions** product ecosystem. See [ecosystem](#ecosystem) below for sister platforms.
 
@@ -14,7 +14,7 @@ Tech Deck is one focused tool in the Shotgun Ninjas Productions suite. Each prod
 
 | Product | Domain | What it does |
 |---|---|---|
-| **Tech Deck** *(this app)* | techdeck.app | IT operations cockpit — tickets, evidence, automation, audit |
+| **Tech Deck** *(this app)* | techdeck.app | IT operations cockpit — documentation, infrastructure, networks, tickets, evidence, automation, audit |
 | TradeFlowKit | tradeflowkit.com | Business ops — leads → quotes → jobs → invoices pipeline |
 | TorqueShed | torqueshed.pro | Automotive diagnostics, repair cases, mechanic community |
 | PulseDesk | pulsedesk.support | Healthcare operations coordination |
@@ -31,11 +31,15 @@ Tech Deck is one focused tool in the Shotgun Ninjas Productions suite. Each prod
 
 ## Modules
 
-Tech Deck ships with **8 modules**, all enabled by default:
+Tech Deck ships as a modular operations platform. Core production modules include:
 
 | Module | Description |
 |--------|-------------|
 | **Core Platform** | Tenants, users, roles (OWNER/ADMIN/TECH/CLIENT), clients, sites, assets, audit log |
+| **Infrastructure & Documentation** | Configuration inventory, network records, contacts, relationships, lifecycle tracking, runbooks, procedures, folders, revisions, attachments, and validated CSV imports |
+| **Service Desk** | Tickets, SLA profiles, dispatch calendar, recurring work, time tracking, invoicing, and client portal workflows |
+| **IT Ops Console** | AI-assisted diagnostics, script generation, deep-dive analysis, network analysis, and saved operational knowledge |
+| **Secure Intake** | Tenant-scoped upload spaces, expiring requests, external upload links, review workflows, policies, storage, and audit |
 | **Evidence Locker** | Upload, tag, search, preview, and download evidence files with SHA-256 deduplication |
 | **License Server** | Products, key issuance/revocation, activation tracking, public validation API |
 | **Webhooks** | Outbound delivery with HMAC-SHA256 signing, retries, SSRF protection, delivery logs |
@@ -97,7 +101,7 @@ npm run start
 | `MAX_UPLOAD_MB` | `25` | Max evidence upload size in MB |
 | `API_ONLY` | `false` | Headless mode — serves only `/api/v1` and `/health` |
 | `ALLOW_INTERNAL_WEBHOOKS` | `false` | Permit webhook URLs targeting private IPs (dev only) |
-| `DEV_AUTH_BYPASS` | `false` | Skip OIDC login in development |
+| `DEV_AUTH_BYPASS` | `false` | Skip normal session login in development |
 | `DEV_USER_ID` | `dev-user` | User ID when auth bypass is active |
 | `DEV_USER_EMAIL` | `dev@localhost` | Email when auth bypass is active |
 | `DEV_TENANT_SLUG` | `dev` | Tenant slug when auth bypass is active |

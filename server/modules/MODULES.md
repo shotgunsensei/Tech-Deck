@@ -13,6 +13,7 @@ OperatorOS is the authority for module entitlements. Local subscription rows are
 | `operatoros` | Server-to-server entitlement sync at `POST /api/operatoros/entitlements/sync` | Service auth | Service token |
 | `calendar` | Dispatch calendar appointments | Auth | Role/tenant |
 | `core` | Tenants, clients, sites, assets, members, audit, CSV import/export | Auth | Role/tenant |
+| `operations` | Infrastructure/network inventory, contacts, relationships, versioned documentation, lifecycle, evidence attachments, validated imports | Auth | Role/tenant and snapshot status for mutations |
 | `demo` | One-click sample data seed for empty workspaces | Auth | OWNER/ADMIN |
 | `evidence` | Compliance evidence files with SHA-256 dedupe | Auth | Snapshot status and storage limit |
 | `invoicing` | Billing config for invoices, invoice generation, line items, public invoice view | Auth + public | Snapshot status for mutations |
